@@ -40,9 +40,17 @@ Array.prototype.findID = function (str) {
 //FontSelect makes a font selection gui widget, and returns an object
 //with the single method getFont, which can be called to get the selected font
 function FontSelect(group, font) {
-  var splitFont = font.split('\t');
-  var fontFamily = splitFont[0];
-  var fontStyle = splitFont[1];
+  var fontFamily = "";
+  var fontStyle  = "";
+    
+  if (typeof font === 'string' || font instanceof String) {
+    var splitFont = font.split('\t');
+    if(splitFont.length == 2) {
+      fontFamily = splitFont[0];
+      fontStyle = splitFont[1];
+    }
+  }
+
   var sysFonts = app.fonts.everyItem();
   var sysFontsList = sysFonts.fontFamily.unique();
   sysFontsList.unshift("- Select Font Family -");
@@ -71,7 +79,7 @@ function FontSelect(group, font) {
         return availableFonts.selection.text + '\t' + availableStyles.selection.text;
       }
       else {
-        return font; //return the default font if no font selected
+        return null; //Now we know the default font is not loaded
       }
     }
   };

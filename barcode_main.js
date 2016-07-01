@@ -2,11 +2,24 @@
 #include 'dropdown.js'
 
 function getStandardSettings(){
-  return {  isbn     : "",
-            addon    : "",
-            isbnFont : "Helvetica Neue LT Std\t55 Roman",
-            codeFont : "OCR B Std\tRegular"
+
+  var Settings = {  isbn     : "",
+                    addon    : "",
+                    isbnFont : "Helvetica Neue LT Std\t55 Roman",
+                    codeFont : "OCR B Std\tRegular"
   }
+
+  var doc = app.activeDocument;
+  if (doc.isValid) {
+      var tempData = doc.extractLabel('id_barcode_settings'); //Always returns a string
+      if(tempData.length > 0){
+          tempData = eval(tempData);
+          if( typeof tempData == 'object') {
+              Settings = tempData;
+          }
+      }
+  }
+  return Settings;
 }
 
 function showDialog(Settings) {
@@ -61,7 +74,9 @@ function showDialog(Settings) {
     }
 
     if( (Settings.isbnFont == null) || (Settings.codeFont == null) ){
-        alert("Please select a font first");
+        if(Settings.isbnFont == null) Settings.isbnFont = "";
+        if(Settings.codeFont == null) Settings.codeFont = "";
+        alert("Please select your fonts first");
         return showDialog(Settings); // Restart
     }
 
@@ -245,7 +260,7 @@ var BarcodeDrawer = (function () {
     drawBox(hpos - 10, vOffset - 15, width, 100, 'Paper');
   }
 
-  function init() {
+  function init(Settings) {
     scale = 0.3;
     normalHeight = 70;
     guardHeight = 75;
@@ -254,6 +269,8 @@ var BarcodeDrawer = (function () {
     hpos = 50;
     vOffset = 50;
     doc = getCurrentOrNewDocument();
+    // Save data in doc so we can load this back into UI
+    doc.insertLabel('id_barcode_settings', Settings.toSource() );
     page = app.activeWindow.activePage;
     var viewPrefs = doc.viewPreferences;
     viewPrefs.horizontalMeasurementUnits = MeasurementUnits.millimeters;
@@ -266,16 +283,16 @@ var BarcodeDrawer = (function () {
     layer = doc.layers.item('barcode');
   }
 
-  function drawBarcode(barWidths, addonWidths, spec) {
-    init();
+  function drawBarcode(barWidths, addonWidths, Settings) {
+    init(Settings);
     drawWhiteBox(!!addonWidths);
     drawText(hpos, vOffset - 10, 98, 9,
-      "ISBN: " + spec.isbn, spec.isbnFont, Justification.LEFT_ALIGN);
+      "ISBN " + Settings.isbn, Settings.isbnFont, Justification.LEFT_ALIGN);
     startGuards();
-    drawMain(barWidths, spec.codeFont);
+    drawMain(barWidths, Settings.codeFont);
     endGuards();
     if (addonWidths) {
-      drawAddon(addonWidths, spec.codeFont);
+      drawAddon(addonWidths, Settings.codeFont);
     }
     page.groups.add(layer.allPageItems);
   }
@@ -288,18 +305,19 @@ var BarcodeDrawer = (function () {
 function main(Settings){
   var newSettings = showDialog(Settings);
   if (newSettings) {
-      var barcode = Barcode().init(newSettings.isbn, newSettings.addon);
-      var barWidths = barcode.getNormalisedWidths();
-      var addonWidths = barcode.getNormalisedAddon();
-      BarcodeDrawer.drawBarcode(barWidths, addonWidths, newSettings);
+      try {
+        var barcode = Barcode().init(Settings);
+        var barWidths = barcode.getNormalisedWidths();
+        var addonWidths = barcode.getNormalisedAddon();
+        BarcodeDrawer.drawBarcode(barWidths, addonWidths, newSettings);
+      } catch( error ) {
+        // Alert nice error
+        alert("Oops, Having trouble creating a quality barcode:\n" + error);
+        // Restart UI so we can either correct the ISBN or select a valid font
+        main(newSettings);
+      }
   } // else: user pressed cancel
 }
 
-try {
-  main();
-} catch( error ) {
-  // Alert nice error
-  alert("Oops, Having trouble creating a quality barcode:\n" + error);
-  // Restart UI so we can either correct the ISBN or select a valid font
-  main(newSettings);
-}
+main(getStandardSettings());
+

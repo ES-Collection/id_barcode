@@ -30,7 +30,10 @@ var Barcode = function () {
   }
 
   return {
-    init: function (isbnStr, addonStr) {
+    init: function (Settings) {
+      var isbnStr  = String(Settings.isbn);
+      var addonStr = String(Settings.addon);
+      
       if (isbnStr) {
         barcode_string = isbnStr;
         stripped = strip(barcode_string);
