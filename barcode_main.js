@@ -1,11 +1,25 @@
 ﻿#include 'barcode_library.js'
 #include 'dropdown.js'
 
-var defaultIsbnFont = "Helvetica Neue LT Std\t55 Roman";
-var defaultCodeFont = "OCR B Std\tRegular";
+function getStandardSettings(){
+  return {  isbn     : "",
+            addon    : "",
+            isbnFont : "Helvetica Neue LT Std\t55 Roman",
+            codeFont : "OCR B Std\tRegular"
+  }
+}
 
+function showDialog(Settings) {
+  if ( (Settings === null) || (typeof Settings !== 'object') ) {
+    var Settings = getStandardSettings();
+  }
+  Settings.isbn  = (typeof Settings.isbn  == 'string') ? Settings.isbn  : "";
+  Settings.addon = (typeof Settings.addon == 'string') ? Settings.addon : "";
 
-function showDialog() {
+  //just for testing
+  //Settings.isbn  = '978-1-907360-21-3';
+  //Settings.addon = '50995';
+  
   var dialog = new Window('dialog', 'New barcode');
   dialog.orientation = 'column';
   dialog.alignChildren = 'left';
@@ -14,19 +28,19 @@ function showDialog() {
   var edittext = input.add('edittext');
   edittext.characters = 20;
   edittext.active = true;
-  //edittext.text = '978-1-907360-21-3'; //just for testing
+  edittext.text = Settings.isbn;
 
   input.add('statictext', undefined, 'Addon (optional):');
   var addonText = input.add('edittext');
   addonText.characters = 10;
-  //addonText.text = '50995'; //just for testing
+  addonText.text = Settings.addon;
 
   dialog.add('statictext', undefined, 'ISBN font:');
   var isbnFontRow = dialog.add('group');
-  var isbnFontSelect = FontSelect(isbnFontRow, defaultIsbnFont);
+  var isbnFontSelect = FontSelect(isbnFontRow, Settings.isbnFont);
   dialog.add('statictext', undefined, 'Barcode font:');
   var codeFontRow = dialog.add('group');
-  var codeFontSelect = FontSelect(codeFontRow, defaultCodeFont);
+  var codeFontSelect = FontSelect(codeFontRow, Settings.codeFont);
   
   var buttonGroup = dialog.add('group');
   buttonGroup.orientation = 'row';
@@ -34,14 +48,27 @@ function showDialog() {
   buttonGroup.add('button', undefined, 'Cancel', {name: 'cancel'});
 
   if (dialog.show() === 1) {
-    return {
-      isbn: edittext.text,
-      addon: addonText.text,
-      isbnFont: isbnFontSelect.getFont(),
-      codeFont: codeFontSelect.getFont()
+
+    Settings.isbnFont = isbnFontSelect.getFont();
+    Settings.codeFont = codeFontSelect.getFont();
+    Settings.isbn     = edittext.text;
+    Settings.addon    = addonText.text;
+
+    if( Settings.isbn === "" ) {
+      // It would be nice to add a validator here
+      alert("Not a valid ISBN");
+      return showDialog(Settings); // Restart
     }
+
+    if( (Settings.isbnFont == null) || (Settings.codeFont == null) ){
+        alert("Please select a font first");
+        return showDialog(Settings); // Restart
+    }
+
+    return Settings;
   }
   else {
+    // User pressed cancel
     return false;
   }
 }
@@ -258,12 +285,21 @@ var BarcodeDrawer = (function () {
   }
 })();
 
-
-var result = showDialog();
-if (result) {
-  var barcode = Barcode().init(result.isbn, result.addon);
-  var barWidths = barcode.getNormalisedWidths();
-  var addonWidths = barcode.getNormalisedAddon();
-  BarcodeDrawer.drawBarcode(barWidths, addonWidths, result);
+function main(Settings){
+  var newSettings = showDialog(Settings);
+  if (newSettings) {
+      var barcode = Barcode().init(newSettings.isbn, newSettings.addon);
+      var barWidths = barcode.getNormalisedWidths();
+      var addonWidths = barcode.getNormalisedAddon();
+      BarcodeDrawer.drawBarcode(barWidths, addonWidths, newSettings);
+  } // else: user pressed cancel
 }
 
+try {
+  main();
+} catch( error ) {
+  // Alert nice error
+  alert("Oops, Having trouble creating a quality barcode:\n" + error);
+  // Restart UI so we can either correct the ISBN or select a valid font
+  main(newSettings);
+}
