@@ -65,11 +65,14 @@ function showDialog(Settings) {
     Settings.isbnFont = isbnFontSelect.getFont();
     Settings.codeFont = codeFontSelect.getFont();
     Settings.isbn     = edittext.text;
-    Settings.addon    = addonText.text;
+    Settings.addon    = addonText.text.replace(/[^\d]+/g, '');
 
-    if( Settings.isbn === "" ) {
-      // It would be nice to add a validator here
-      alert("Not a valid ISBN");
+    if( (Settings.addon != "") || (Settings.addon.length == 5) ){
+      alert("Addon should be 5 digits long\nIs " + Settings.addon.length );
+      return showDialog(Settings); // Restart
+    }
+    if( !checkCheckDigit(Settings.isbn) ) {
+      alert("Not a valid ISBN\n(Check digit does not match)");
       return showDialog(Settings); // Restart
     }
 

@@ -2,6 +2,31 @@
   $.writeln(text);
 }
 
+var checkCheckDigit = function(barcode_string) {
+  var stripped = barcode_string.replace(/[^\d]+/g, '');
+  
+  function getDigit ( digit ) {
+      return parseInt(stripped[digit], 10);
+  }
+  
+  var givenCheckDigit = getDigit(stripped.length-1);
+  
+  var total = 0;
+  for (var i = 0; i < stripped.length - 1; i++) { //-1 because we don't include check digit
+    if (i % 2 === 0) {
+      total += getDigit(i);
+    }
+    else {
+      total += getDigit(i) * 3;
+    }
+  }
+  var checkDigit = 10 - (total % 10);
+  if (checkDigit === 10) {
+    checkDigit = 0;
+  }
+  return (checkDigit === givenCheckDigit);
+}
+
 var Barcode = function () {
   var barcode_string;
   var addon_string;
@@ -37,13 +62,16 @@ var Barcode = function () {
       if (isbnStr) {
         barcode_string = isbnStr;
         stripped = strip(barcode_string);
-        if ( !this.checkCheckDigit() ) {
+        if ( !checkCheckDigit(stripped) ) {
           throw "Check digit incorrect";
         }
       }
 
       if (addonStr) {
         addon_string = strip(addonStr);
+        if(addon_string.length != 5) {
+        	throw "Addon should be 5 digits long, but is " + addon_string.length;
+        }
       }
 
       return this;
@@ -52,32 +80,7 @@ var Barcode = function () {
     getStripped: function () {
       return stripped;
     },
-
-    getCheckDigit: function () {
-      return this.getDigit(12);
-    },
-
-    getDigit: function (digit) {
-      return parseInt(stripped[digit], 10);
-    },
-
-    checkCheckDigit: function () {
-      var total = 0;
-      for (var i = 0; i < stripped.length - 1; i++) { //-1 because we don't include check digit
-        if (i % 2 === 0) {
-          total += this.getDigit(i);
-        }
-        else {
-          total += this.getDigit(i) * 3;
-        }
-      }
-      var checkDigit = 10 - (total % 10);
-      if (checkDigit === 10) {
-        checkDigit = 0;
-      }
-      return (checkDigit === this.getCheckDigit());
-    },
-
+	
     getBarWidths: function () {
       var barWidths = [];
       for (var i = 1; i < stripped.length; i++) { //don't include first number of barcode
