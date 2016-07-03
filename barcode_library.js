@@ -2,30 +2,54 @@
   $.writeln(text);
 }
 
-var checkCheckDigit = function(barcode_string) {
-  var stripped = barcode_string.replace(/[^\d]+/g, '');
-  
-  function getDigit ( digit ) {
-      return parseInt(stripped[digit], 10);
-  }
-  
-  var givenCheckDigit = getDigit(stripped.length-1);
-  
-  var total = 0;
-  for (var i = 0; i < stripped.length - 1; i++) { //-1 because we don't include check digit
-    if (i % 2 === 0) {
-      total += getDigit(i);
+var checkCheckDigit = function(str) {
+    // Check ISBN as found here:
+    // http://stackoverflow.com/questions/11104439/how-do-i-check-if-an-input-contains-an-isbn-using-javascript/
+
+    var str = String(str);
+
+    var sum,
+        weight,
+        digit,
+        check,
+        i;
+
+    str = str.replace(/[^0-9X]/gi, '');
+
+    if (str.length != 10 && str.length != 13) {
+        return false;
     }
-    else {
-      total += getDigit(i) * 3;
+
+    if (str.length == 13) {
+        sum = 0;
+        for (i = 0; i < 12; i++) {
+            digit = parseInt(str[i]);
+            if (i % 2 == 1) {
+                sum += 3*digit;
+            } else {
+                sum += digit;
+            }
+        }
+        check = (10 - (sum % 10)) % 10;
+        return (check == str[str.length-1]);
     }
-  }
-  var checkDigit = 10 - (total % 10);
-  if (checkDigit === 10) {
-    checkDigit = 0;
-  }
-  return (checkDigit === givenCheckDigit);
+
+    if (str.length == 10) {
+        weight = 10;
+        sum = 0;
+        for (i = 0; i < 9; i++) {
+            digit = parseInt(str[i]);
+            sum += weight*digit;
+            weight--;
+        }
+        check = 11 - (sum % 11);
+        if (check == 10) {
+            check = 'X';
+        }
+        return (check == str[str.length-1].toUpperCase());
+    }
 }
+
 
 var Barcode = function () {
   var barcode_string;
@@ -50,8 +74,11 @@ var Barcode = function () {
     return norm;
   }
 
-  function strip(str) {
+  function stripAddon(str) {
     return str.replace(/[^\d]+/g, '');
+  }
+  function stripISBN(str) {
+    return str.replace(/[^0-9X]/gi, '');
   }
 
   return {
@@ -61,14 +88,14 @@ var Barcode = function () {
       
       if (isbnStr) {
         barcode_string = isbnStr;
-        stripped = strip(barcode_string);
+        stripped = stripISBN(barcode_string);
         if ( !checkCheckDigit(stripped) ) {
           throw "Check digit incorrect";
         }
       }
 
       if (addonStr) {
-        addon_string = strip(addonStr);
+        addon_string = stripAddon(addonStr);
         if(addon_string.length != 5) {
         	throw "Addon should be 5 digits long, but is " + addon_string.length;
         }
