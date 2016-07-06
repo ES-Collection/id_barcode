@@ -67,7 +67,7 @@ function showDialog(Settings) {
 
     Settings.isbnFont = isbnFontSelect.getFont();
     Settings.codeFont = codeFontSelect.getFont();
-    Settings.isbn     = edittext.text.replace(/[^0-9X]/gi, '');
+    Settings.isbn     = edittext.text.replace(/[^0-9X\-]/gi, ''); // Preserve human readable
     Settings.addon    = addonText.text.replace(/[^\d]+/g, '');
 
     if( (Settings.addon != "") || (Settings.addon.length == 5) ){
@@ -184,14 +184,16 @@ var BarcodeDrawer = (function () {
     // calculate the initial fontsize 
     // and use this size to draw the other characters
     // this makes sure all numbers are the same size
-    var fontSize = drawChar(hpos - 10, '9', font, 13, false); //initial '9'
+    var textBox = drawChar(hpos - 10, '9', font, 13, false); //initial '9'
+    var fontSize = textBox.textStyleRanges[0].pointSize;
 
     for (var i = 0; i < barWidths.length; i++) {
       pattern = barWidths[i][0];
       widths = barWidths[i][1];
       digit = barWidths[i][2];
 
-      drawChar(hpos, digit, font, fontSize, true);
+      textBox = drawChar(hpos, digit, font, fontSize, true);
+      textBox.parentStory.otfFigureStyle = OTFFigureStyle.TABULAR_LINING;
 
       for (var j = 0; j < 4; j++) {
         width = widths[j];
@@ -240,6 +242,8 @@ var BarcodeDrawer = (function () {
     var textBox = page.textFrames.add();
     textBox.contents = text;
     textBox.textFramePreferences.verticalJustification = frameAlign;
+    // Set standard to capheight so alignment is more consistent between different fonts
+    textBox.textFramePreferences.firstBaselineOffset = FirstBaseline.CAP_HEIGHT;
     var textStyle = textBox.textStyleRanges[0];
     textStyle.appliedFont = font;
     textStyle.pointSize = fontSize;
@@ -247,6 +251,8 @@ var BarcodeDrawer = (function () {
     textBox.geometricBounds = [y, x, y + boxHeight, x + boxWidth];
     // We don't want the numbers to hang outside the textframe!
     textBox.parentStory.storyPreferences.opticalMarginAlignment = false;
+    // We don't want lining figures!
+    textBox.parentStory.otfFigureStyle = OTFFigureStyle.TABULAR_LINING;
     if (fitFrame) {
       // Fit frame to type
       textBox.textFramePreferences.autoSizingReferencePoint = AutoSizingReferenceEnum.TOP_LEFT_POINT;
@@ -265,9 +271,8 @@ var BarcodeDrawer = (function () {
         safetyCounter++;
       }
     }
-    // Always return the point size
-    // So caller can use this to fit frame later
-    return textStyle.pointSize;
+    // Always return the textbox
+    return textBox;
   }
 
   function drawChar(x, character, font, fontSize, fitFrame) {
@@ -314,8 +319,11 @@ var BarcodeDrawer = (function () {
     
     // TODO: We need to put hyphens in the human readable ISBN
 
-    drawText(hpos - 7, vOffset - 15, 102, 12, false,
+    var textBox = drawText(hpos - 7, vOffset - 15, 102, 12, false,
       "ISBN" + String.fromCharCode(0x2007) + Settings.isbn, Settings.isbnFont, 13, Justification.FULLY_JUSTIFIED, VerticalJustification.BOTTOM_ALIGN);
+
+    textBox.parentStory.otfFigureStyle = OTFFigureStyle.PROPORTIONAL_LINING;
+
     startGuards();
     drawMain(barWidths, Settings.codeFont);
     endGuards();
