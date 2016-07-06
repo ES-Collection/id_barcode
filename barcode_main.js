@@ -181,14 +181,17 @@ var BarcodeDrawer = (function () {
     var width = null;
     var digit = null;
 
-    drawChar(hpos - 10, '9', font); //initial '9'
+    // calculate the initial fontsize 
+    // and use this size to draw the other characters
+    // this makes sure all numbers are the same size
+    var fontSize = drawChar(hpos - 10, '9', font, 13, false); //initial '9'
 
     for (var i = 0; i < barWidths.length; i++) {
       pattern = barWidths[i][0];
       widths = barWidths[i][1];
       digit = barWidths[i][2];
 
-      drawChar(hpos, digit, font);
+      drawChar(hpos, digit, font, fontSize, true);
 
       for (var j = 0; j < 4; j++) {
         width = widths[j];
@@ -229,33 +232,49 @@ var BarcodeDrawer = (function () {
     }
   }
 
-  function drawText(x, y, boxWidth, boxHeight, text, font, align) {
-    var fontSize = 12; //this is just a starting point
+  function drawText(x, y, boxWidth, boxHeight, fitFrame, text, font, fontSize, textAlign, frameAlign) {
     x *= scale;
     y *= scale;
     boxWidth *= scale;
     boxHeight *= scale;
     var textBox = page.textFrames.add();
     textBox.contents = text;
+    textBox.textFramePreferences.verticalJustification = frameAlign;
     var textStyle = textBox.textStyleRanges[0];
     textStyle.appliedFont = font;
     textStyle.pointSize = fontSize;
-    textStyle.justification = align;
+    textStyle.justification = textAlign;
     textBox.geometricBounds = [y, x, y + boxHeight, x + boxWidth];
-    var safetyCounter = 0;
-
-    //Keep reducing fontsize until no more overset text
-    while (textBox.overflows && safetyCounter < 100) {
-      textStyle.pointSize -= 0.5;
-      safetyCounter++;
+    // We don't want the numbers to hang outside the textframe!
+    textBox.parentStory.storyPreferences.opticalMarginAlignment = false;
+    if (fitFrame) {
+      // Fit frame to type
+      textBox.textFramePreferences.autoSizingReferencePoint = AutoSizingReferenceEnum.TOP_LEFT_POINT;
+      textBox.textFramePreferences.autoSizingType = AutoSizingTypeEnum.HEIGHT_AND_WIDTH;
+    } else {
+      // Fit type to box
+      var safetyCounter = 0;
+      //Keep reducing fontsize until no more overset text
+      while (textBox.overflows && safetyCounter < 100) {
+        if(fontSize > 1) {
+          fontSize -= 0.5;
+          textStyle.pointSize = fontSize;
+        } else {
+          continue;
+        }
+        safetyCounter++;
+      }
     }
+    // Always return the point size
+    // So caller can use this to fit frame later
+    return textStyle.pointSize;
   }
 
-  function drawChar(x, character, font) {
+  function drawChar(x, character, font, fontSize, fitFrame) {
     var y = vOffset + normalHeight + 2;
     var boxWidth = 7;
     var boxHeight = 9;
-    drawText(x, y, boxWidth, boxHeight, character, font, Justification.LEFT_ALIGN);
+    return drawText(x, y, boxWidth, boxHeight, fitFrame, character, font, fontSize, Justification.LEFT_ALIGN, VerticalJustification.TOP_ALIGN);
   }
 
   function drawWhiteBox(wide) {
@@ -292,8 +311,11 @@ var BarcodeDrawer = (function () {
   function drawBarcode(barWidths, addonWidths, Settings) {
     init(Settings);
     drawWhiteBox(!!addonWidths);
-    drawText(hpos, vOffset - 10, 98, 9,
-      "ISBN " + Settings.isbn, Settings.isbnFont, Justification.LEFT_ALIGN);
+    
+    // TODO: We need to put hyphens in the human readable ISBN
+
+    drawText(hpos - 7, vOffset - 15, 102, 12, false,
+      "ISBN" + String.fromCharCode(0x2007) + Settings.isbn, Settings.isbnFont, 13, Justification.FULLY_JUSTIFIED, VerticalJustification.BOTTOM_ALIGN);
     startGuards();
     drawMain(barWidths, Settings.codeFont);
     endGuards();
