@@ -419,7 +419,7 @@ function showDialog(Settings) {
     Settings.isbn     = edittext.text.replace(/[^0-9X\-]/gi, ''); // Preserve human readable
     Settings.addon    = addonText.text.replace(/[^\d]+/g, '');
 
-    if( (Settings.addon != "") || (Settings.addon.length == 5) ){
+    if( (Settings.addon != "") && (Settings.addon.length != 5) ){
       alert("Addon should be 5 digits long\nIs " + Settings.addon.length );
       return showDialog(Settings); // Restart
     }
@@ -534,15 +534,14 @@ var BarcodeDrawer = (function () {
     // and use this size to draw the other characters
     // this makes sure all numbers are the same size
     var textBox = drawChar(hpos - 10, '9', font, 13, false); //initial '9'
-    var fontSize = textBox.textStyleRanges[0].pointSize;
+    var fontSize = fitTextBox(textBox, true, true); // Fit type size
 
     for (var i = 0; i < barWidths.length; i++) {
       pattern = barWidths[i][0];
       widths = barWidths[i][1];
       digit = barWidths[i][2];
 
-      textBox = drawChar(hpos, digit, font, fontSize, true);
-      textBox.parentStory.otfFigureStyle = OTFFigureStyle.TABULAR_LINING;
+      drawChar(hpos, digit, font, fontSize, true);
 
       for (var j = 0; j < 4; j++) {
         width = widths[j];
@@ -555,9 +554,10 @@ var BarcodeDrawer = (function () {
         midGuards();
       }
     }
+    return fontSize;
   }
 
-  function drawAddon(addonWidths, font) {
+  function drawAddon(addonWidths, font, fontSize) {
     var pattern = null;
     var widths = null;
     var width = null;
@@ -570,7 +570,7 @@ var BarcodeDrawer = (function () {
       digit = addonWidths[i][2]; //may be undefined
 
       if (digit) {
-        drawChar(hpos, digit, font);
+        drawChar(hpos, digit, font, fontSize, true);
       }
 
       for (var j = 0; j < widths.length; j++) {
@@ -583,7 +583,32 @@ var BarcodeDrawer = (function () {
     }
   }
 
-  function drawText(x, y, boxWidth, boxHeight, fitFrame, text, font, fontSize, textAlign, frameAlign) {
+  function fitTextBox(textBox, fitText, fitBox){
+    var textStyle = textBox.textStyleRanges[0];
+    var fontSize  = textStyle.pointSize;
+    if (fitText) {
+      // Fit type to box
+      var safetyCounter = 0;
+      //Keep reducing fontsize until no more overset text
+      while (textBox.overflows && safetyCounter < 100) {
+        if(fontSize > 1) {
+          fontSize -= 0.5;
+          textStyle.pointSize = fontSize;
+        } else {
+          continue;
+        }
+        safetyCounter++;
+      }
+    }
+    if (fitBox) {
+      // Fit frame to type
+      textBox.textFramePreferences.autoSizingReferencePoint = AutoSizingReferenceEnum.TOP_LEFT_POINT;
+      textBox.textFramePreferences.autoSizingType = AutoSizingTypeEnum.WIDTH_ONLY;
+    }
+    return fontSize;
+  }
+
+  function drawText(x, y, boxWidth, boxHeight, text, font, fontSize, textAlign, frameAlign) {
     x *= scale;
     y *= scale;
     boxWidth *= scale;
@@ -600,35 +625,21 @@ var BarcodeDrawer = (function () {
     textBox.geometricBounds = [y, x, y + boxHeight, x + boxWidth];
     // We don't want the numbers to hang outside the textframe!
     textBox.parentStory.storyPreferences.opticalMarginAlignment = false;
-    // We don't want lining figures!
-    textBox.parentStory.otfFigureStyle = OTFFigureStyle.TABULAR_LINING;
-    if (fitFrame) {
-      // Fit frame to type
-      textBox.textFramePreferences.autoSizingReferencePoint = AutoSizingReferenceEnum.TOP_LEFT_POINT;
-      textBox.textFramePreferences.autoSizingType = AutoSizingTypeEnum.HEIGHT_AND_WIDTH;
-    } else {
-      // Fit type to box
-      var safetyCounter = 0;
-      //Keep reducing fontsize until no more overset text
-      while (textBox.overflows && safetyCounter < 100) {
-        if(fontSize > 1) {
-          fontSize -= 0.5;
-          textStyle.pointSize = fontSize;
-        } else {
-          continue;
-        }
-        safetyCounter++;
-      }
-    }
     // Always return the textbox
     return textBox;
   }
 
-  function drawChar(x, character, font, fontSize, fitFrame) {
+  function drawChar(x, character, font, fontSize, fitBox) {
     var y = vOffset + normalHeight + 2;
     var boxWidth = 7;
     var boxHeight = 9;
-    return drawText(x, y, boxWidth, boxHeight, fitFrame, character, font, fontSize, Justification.LEFT_ALIGN, VerticalJustification.TOP_ALIGN);
+    var textBox = drawText(x, y, boxWidth, boxHeight, character, font, fontSize, Justification.LEFT_ALIGN, VerticalJustification.TOP_ALIGN);
+    // We don't want lining figures!
+    textBox.parentStory.otfFigureStyle = OTFFigureStyle.TABULAR_LINING;
+    if(fitBox) {
+      fitTextBox(textBox, false, true);
+    }
+    return textBox;
   }
 
   function drawWhiteBox(wide) {
@@ -666,18 +677,19 @@ var BarcodeDrawer = (function () {
     init(Settings);
     drawWhiteBox(!!addonWidths);
     
-    // TODO: We need to put hyphens in the human readable ISBN
-
-    var textBox = drawText(hpos - 7, vOffset - 15, 102, 12, false,
+    var textBox = drawText(hpos - 7, vOffset - 15, 102, 12, 
       "ISBN" + String.fromCharCode(0x2007) + Settings.isbn, Settings.isbnFont, 13, Justification.FULLY_JUSTIFIED, VerticalJustification.BOTTOM_ALIGN);
 
     textBox.parentStory.otfFigureStyle = OTFFigureStyle.PROPORTIONAL_LINING;
+    textBox.parentStory.kerningMethod = "Optical"; // Most fonts have bad kerning for all caps characters
+    
+    fitTextBox(textBox, true, false);
 
     startGuards();
-    drawMain(barWidths, Settings.codeFont);
+    Settings.codeFontSize = drawMain(barWidths, Settings.codeFont);
     endGuards();
     if (addonWidths) {
-      drawAddon(addonWidths, Settings.codeFont);
+      drawAddon(addonWidths, Settings.codeFont, Settings.codeFontSize);
     }
     page.groups.add(layer.allPageItems);
   }
