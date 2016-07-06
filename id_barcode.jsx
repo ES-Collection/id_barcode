@@ -352,11 +352,14 @@ function FontSelect(group, font) {
 
 function getStandardSettings(){
 
-  var Settings = {  isbn     : "",
-                    addon    : "",
-                    isbnFont : "Helvetica Neue LT Std\t55 Roman",
-                    codeFont : "OCR B Std\tRegular"
-  }
+  var Settings = {  isbn              : "",
+                    addon             : "",
+                    isbnFont          : "OCR B Std\tRegular", // Setting tracking to -100 is nice for this font
+                    codeFont          : "OCR B Std\tRegular",
+                    isbnFontTracking  : 0,
+                    whiteBox          : true,
+                    offset            : { x : 0, y : 0 },
+                    heightPercent     : 60 }
   
   if (app.documents.length == 0) return Settings;
   // else
@@ -474,6 +477,7 @@ var BarcodeDrawer = (function () {
     rect.strokeWeight = 0;
     rect.fillColor = colour || "Black";
     rect.geometricBounds = [y, x, y + height, x + width];
+    return rect;
   }
 
   function getCurrentOrNewDocument() {
@@ -592,7 +596,7 @@ var BarcodeDrawer = (function () {
       //Keep reducing fontsize until no more overset text
       while (textBox.overflows && safetyCounter < 100) {
         if(fontSize > 1) {
-          fontSize -= 0.5;
+          fontSize -= 0.25;
           textStyle.pointSize = fontSize;
         } else {
           continue;
@@ -616,8 +620,6 @@ var BarcodeDrawer = (function () {
     var textBox = page.textFrames.add();
     textBox.contents = text;
     textBox.textFramePreferences.verticalJustification = frameAlign;
-    // Set standard to capheight so alignment is more consistent between different fonts
-    textBox.textFramePreferences.firstBaselineOffset = FirstBaseline.CAP_HEIGHT;
     var textStyle = textBox.textStyleRanges[0];
     textStyle.appliedFont = font;
     textStyle.pointSize = fontSize;
@@ -636,6 +638,8 @@ var BarcodeDrawer = (function () {
     var textBox = drawText(x, y, boxWidth, boxHeight, character, font, fontSize, Justification.LEFT_ALIGN, VerticalJustification.TOP_ALIGN);
     // We don't want lining figures!
     textBox.parentStory.otfFigureStyle = OTFFigureStyle.TABULAR_LINING;
+    // Set standard to capheight so alignment is more consistent between different fonts
+    textBox.textFramePreferences.firstBaselineOffset = FirstBaseline.CAP_HEIGHT;
     if(fitBox) {
       fitTextBox(textBox, false, true);
     }
@@ -647,17 +651,26 @@ var BarcodeDrawer = (function () {
     if (wide) {
       width = 170;
     }
-    drawBox(hpos - 10, vOffset - 15, width, 100, 'Paper');
+    var whiteBox = drawBox(hpos - 10, vOffset - 10, width, normalHeight + 22, bgSwatchName);
+    whiteBox.label = "barcode_whiteBox";
   }
 
   function init(Settings) {
     scale = 0.3;
+    heightAdjustPercent = Settings.heightPercent;
     normalHeight = 70;
     guardHeight = 75;
     addonHeight = 60;
+    normalHeight = (normalHeight / 100) * heightAdjustPercent;
+    guardHeight  = (guardHeight / 100) * heightAdjustPercent;
+    addonHeight  = (addonHeight / 100) * heightAdjustPercent;
     reduce = 0.3;
-    hpos = 50;
-    vOffset = 50;
+    devider = 1/reduce;
+    hpos = Settings.offset.x * devider;
+    vOffset = Settings.offset.y * devider;
+    hpos += 10; // Normalise for whitebox
+    vOffset += 10;  // Normalise for whitebox
+
     doc = getCurrentOrNewDocument();
     // Save data in doc so we can load this back into UI
     doc.insertLabel('id_barcode_settings', Settings.toSource() );
@@ -671,18 +684,27 @@ var BarcodeDrawer = (function () {
     }
     doc.layers.add({name: 'barcode'});
     layer = doc.layers.item('barcode');
+
+    bgSwatchName = 'None';
+    if(Settings.whiteBox){
+      bgSwatchName = 'Paper';
+    }
+
   }
 
   function drawBarcode(barWidths, addonWidths, Settings) {
     init(Settings);
     drawWhiteBox(!!addonWidths);
     
-    var textBox = drawText(hpos - 7, vOffset - 15, 102, 12, 
+    var textBox = drawText(hpos - 7, vOffset - 8, 102, 6.5, 
       "ISBN" + String.fromCharCode(0x2007) + Settings.isbn, Settings.isbnFont, 13, Justification.FULLY_JUSTIFIED, VerticalJustification.BOTTOM_ALIGN);
 
     textBox.parentStory.otfFigureStyle = OTFFigureStyle.PROPORTIONAL_LINING;
     textBox.parentStory.kerningMethod = "Optical"; // Most fonts have bad kerning for all caps characters
-    
+    textBox.parentStory.tracking = Settings.isbnFontTracking;
+    textBox.textFramePreferences.firstBaselineOffset = FirstBaseline.FIXED_HEIGHT;
+    textBox.textFramePreferences.minimumFirstBaselineOffset = 0;
+
     fitTextBox(textBox, true, false);
 
     startGuards();
@@ -691,7 +713,8 @@ var BarcodeDrawer = (function () {
     if (addonWidths) {
       drawAddon(addonWidths, Settings.codeFont, Settings.codeFontSize);
     }
-    page.groups.add(layer.allPageItems);
+    var BarcodeGroup = page.groups.add(layer.allPageItems);
+    BarcodeGroup.label = "Barcode_Complete";
   }
 
   return {
