@@ -352,7 +352,9 @@ function FontSelect(group, font) {
 
 function getStandardSettings(){
 
-  var Settings = {  isbn              : "",
+  var Settings = {  doc               : undefined,
+                    pageIndex         : -1,
+                    isbn              : "",
                     addon             : "",
                     isbnFont          : "OCR B Std\tRegular", // Setting tracking to -100 is nice for this font
                     codeFont          : "OCR B Std\tRegular",
@@ -363,10 +365,10 @@ function getStandardSettings(){
   
   if (app.documents.length == 0) return Settings;
   // else
-  var doc = app.activeDocument;
+  Settings.doc = app.activeDocument;
   
-  if (doc.isValid) {
-      var tempData = doc.extractLabel('id_barcode_settings'); //Always returns a string
+  if (Settings.doc.isValid) {
+      var tempData = Settings.doc.extractLabel('id_barcode_settings'); //Always returns a string
       if(tempData.length > 0){
           tempData = eval(tempData);
           if( typeof tempData == 'object') {
@@ -374,6 +376,7 @@ function getStandardSettings(){
           }
       }
   }
+
   return Settings;
 }
 
@@ -384,17 +387,40 @@ function showDialog(Settings) {
   Settings.isbn  = (typeof Settings.isbn  == 'string') ? Settings.isbn  : "";
   Settings.addon = (typeof Settings.addon == 'string') ? Settings.addon : "";
 
+  var selectionBounds, pageBounds, marginBounds = [0,0,0,0];
+  var alignToDropdown = ["Align to page", "Align to page Margins"];
+  var docunits = "mm";
+  var originalRuler = undefined;
+  var list_of_pages = ["1"];
+
+  if(Settings.doc == undefined) {
+    Settings.pageIndex = 0;
+  } else {
+    var list_of_pages = Settings.doc.pages.everyItem().name;
+
+    if( (Settings.pageIndex < 0) || (Settings.pageIndex > list_of_pages.length-1) ) {
+      // Let’s see which page is selected
+      for (var j=0; j<=list_of_pages.length-1; j++){
+        if(list_of_pages[j] == app.activeWindow.activePage.name){
+          Settings.pageIndex = j;
+          break;
+        }
+      }
+    }
+  }
+  
+  
   //just for testing
   //Settings.isbn  = '978-1-907360-21-3';
   //Settings.addon = '50995';
-  
+
   var dialog = new Window('dialog', 'New barcode');
   dialog.orientation = 'column';
   dialog.alignChildren = 'left';
   var input = dialog.add('group');
   input.add('statictext', undefined, 'ISBN:');
   var edittext = input.add('edittext');
-  edittext.characters = 20;
+  edittext.characters = 15;
   edittext.active = true;
   edittext.text = Settings.isbn;
 
@@ -403,25 +429,182 @@ function showDialog(Settings) {
   addonText.characters = 10;
   addonText.text = Settings.addon;
 
-  dialog.add('statictext', undefined, 'ISBN font:');
-  var isbnFontRow = dialog.add('group');
+  input.add('statictext', undefined, 'Page:');
+  var pageSelect = input.add('dropdownlist', undefined, list_of_pages);
+  pageSelect.selection = pageSelect.items[Settings.pageIndex];
+
+  var fontPanel = dialog.add("panel", undefined, "Fonts");
+  fontPanel.margins = 20;
+  fontPanel.alignChildren = "left";
+  fontPanel.orientation = 'column';
+  fontPanel.add('statictext', undefined, 'Human-readable');
+  var isbnFontRow = fontPanel.add('group');
   var isbnFontSelect = FontSelect(isbnFontRow, Settings.isbnFont);
-  dialog.add('statictext', undefined, 'Barcode font:');
-  var codeFontRow = dialog.add('group');
+  fontPanel.add('statictext', undefined, 'Machine-readable');
+  var codeFontRow = fontPanel.add('group');
   var codeFontSelect = FontSelect(codeFontRow, Settings.codeFont);
   
+  // Add options
+  var extraoptionsPanel = dialog.add('group');
+      extraoptionsPanel.alignChildren = "top";
+      extraoptionsPanel.orientation   = 'row';
+
+  /////////////////////
+  // Start REF panel //
+  /////////////////////
+  var refPanel = extraoptionsPanel.add("panel", undefined, "Alignment");
+  refPanel.margins = 20;
+  refPanel.alignChildren = "top";
+  refPanel.orientation = 'row';
+
+  // START REF SQUARE GROUP //
+  var refSquare = refPanel.add("group");
+  refSquare.orientation = 'column';
+
+  var topRow = refSquare.add("group");
+  for(var i = 0; i < 3; i++){
+  topRow.add("radiobutton", undefined,"");
+  }
+  var midRow = refSquare.add("group");
+  for(var i = 0; i < 3; i++){
+  midRow.add("radiobutton", undefined,"");
+  }
+  var botRow = refSquare.add("group");
+  for(var i = 0; i < 3; i++){
+  botRow.add("radiobutton", undefined,"");
+  }
+  topRow.children[0].value = true;
+
+  // Add event listeners
+  for(var i = 0; i < 3; i++){
+    
+    topRow.children[i].onActivate = function(){
+      for(var i = 0; i < 3; i++){
+        midRow.children[i].value = false;
+        botRow.children[i].value = false;
+      }
+    }
+
+    midRow.children[i].onActivate = function(){
+      for(var i = 0; i < 3; i++){
+        topRow.children[i].value = false;
+        botRow.children[i].value = false;
+      }
+    }
+
+    botRow.children[i].onActivate = function(){
+      for(var i = 0; i < 3; i++){
+        topRow.children[i].value = false;
+        midRow.children[i].value = false;
+      }
+    }
+  }
+
+  // END REF SQUARE GROUP //
+
+
+  var optionPanel = refPanel.add("group");
+  optionPanel.alignChildren = "top";
+  optionPanel.orientation = 'column';
+
+  var offset = optionPanel.add("dropdownlist", undefined, alignToDropdown);
+  offset.selection = 0;
+
+  var offsetXRow = optionPanel.add("group");
+  offsetXRow.alignChildren = "left";
+  offsetXRow.orientation = "row";
+  var offsetYRow = optionPanel.add("group");
+  offsetYRow.alignChildren = "left";
+  offsetYRow.orientation = "row";
+
+  offsetXRow.add("statictext", undefined,"Offset X: ");
+  var offsetX = offsetXRow.add("edittext", undefined,[Settings.offset.x + " " + docunits]);
+  offsetX.characters=6;
+  offsetYRow.add("statictext", undefined,"Offset Y: ");
+  var offsetY = offsetYRow.add("edittext", undefined,[Settings.offset.y + " " + docunits]);
+  offsetY.characters=6;
+
+  offsetX.onChange = function () {offsetX.text = parseFloat(offsetX.text) + " " + docunits;}
+  offsetY.onChange = function () {offsetY.text = parseFloat(offsetY.text) + " " + docunits;}
+
+  ///////////////////
+  // END REF panel //
+  ///////////////////
+
+  ////////////////////////////
+  // Start Adjustment panel //
+  ////////////////////////////
+  var adjustPanel = extraoptionsPanel.add("panel", undefined, "Adjustments");
+      adjustPanel.margins = 20;
+      adjustPanel.alignChildren = "left";
+      adjustPanel.orientation = 'column';
+
+  var heightAdjust = adjustPanel.add('group');
+  heightAdjust.add('statictext', undefined, 'Height adjustment:');
+  var heightPercentInput = heightAdjust.add('edittext', undefined, Settings.heightPercent);
+  heightPercentInput.characters = 4;
+  heightPercentInput.onChanging = function () { heightPercentInput.text = String(parseFloat(heightPercentInput.text)) };
+  heightAdjust.add('statictext', undefined, '%');
+
+  var whiteBG = adjustPanel.add ("checkbox", undefined, "White background");
+      whiteBG.value = Settings.whiteBox || false;
+
+  //////////////////////////
+  // END Adjustment panel //
+  //////////////////////////
+
   var buttonGroup = dialog.add('group');
-  buttonGroup.orientation = 'row';
-  buttonGroup.add('button', undefined, 'OK', {name: 'ok'});
-  buttonGroup.add('button', undefined, 'Cancel', {name: 'cancel'});
+      buttonGroup.orientation = 'row';
+      buttonGroup.margins = 10;
+      buttonGroup.add('button', undefined, 'OK', {name: 'ok'});
+      buttonGroup.add('button', undefined, 'Cancel', {name: 'cancel'});
+
+  function getSelectedReferencePoint(){
+    // Check top row
+    var topRowOptions = ["TOP_LEFT_ANCHOR", "TOP_CENTER_ANCHOR", "TOP_RIGHT_ANCHOR" ];
+    var midRowOptions = ["LEFT_CENTER_ANCHOR", "CENTER_ANCHOR ", "RIGHT_CENTER_ANCHOR" ];
+    var botRowOptions = ["BOTTOM_LEFT_ANCHOR", "BOTTOM_CENTER_ANCHOR", "BOTTOM_RIGHT_ANCHOR" ];
+
+    for(var i = 0; i < 3; i++){
+      if(topRow.children[i].value == true){
+        return topRowOptions[i];
+      }
+      if(midRow.children[i].value == true){
+        return midRowOptions[i];
+      }
+      if(botRow.children[i].value == true){
+        return botRowOptions[i];
+      }
+    }
+  }
+
+  function getRefBounds(){
+    alert(offset.selection);
+    //index @ 0?
+    switch(offset.selection){
+      case 1: //Page
+        break;
+      case 2: //Margins
+        break;
+      case 3: //Selection
+        break;
+      default:
+        alert("Oops, something went wrong!");
+        break;
+    }
+  }
 
   if (dialog.show() === 1) {
 
-    Settings.isbnFont = isbnFontSelect.getFont();
-    Settings.codeFont = codeFontSelect.getFont();
-    Settings.isbn     = edittext.text.replace(/[^0-9X\-]/gi, ''); // Preserve human readable
-    Settings.addon    = addonText.text.replace(/[^\d]+/g, '');
-
+    Settings.isbnFont      = isbnFontSelect.getFont();
+    Settings.codeFont      = codeFontSelect.getFont();
+    Settings.isbn          = edittext.text.replace(/[^0-9X\-]/gi, ''); // Preserve human readable
+    Settings.addon         = addonText.text.replace(/[^\d]+/g, '');
+    Settings.heightPercent = heightPercentInput.text.replace(/[^\d]+/g, '');
+    Settings.whiteBox      = whiteBG.value;
+    Settings.offset        = { x : parseFloat(offsetX.text), y : parseFloat(offsetY.text) };
+    Settings.pageIndex     = pageSelect.selection.index;
+    
     if( (Settings.addon != "") && (Settings.addon.length != 5) ){
       alert("Addon should be 5 digits long\nIs " + Settings.addon.length );
       return showDialog(Settings); // Restart
@@ -674,7 +857,13 @@ var BarcodeDrawer = (function () {
     doc = getCurrentOrNewDocument();
     // Save data in doc so we can load this back into UI
     doc.insertLabel('id_barcode_settings', Settings.toSource() );
-    page = app.activeWindow.activePage;
+
+    if( (Settings.pageIndex < 0) || (Settings.pageIndex > doc.pages.length-1) ) {
+      page = doc.pages[0];
+    } else {
+      page = doc.pages[Settings.pageIndex];
+    }
+    
     var viewPrefs = doc.viewPreferences;
     viewPrefs.horizontalMeasurementUnits = MeasurementUnits.millimeters;
     viewPrefs.verticalMeasurementUnits = MeasurementUnits.millimeters;
@@ -739,5 +928,10 @@ function main(Settings){
   } // else: user pressed cancel
 }
 
-main(getStandardSettings());
+try {
+  main(getStandardSettings());  
+} catch ( error ) {
+  alert("Oops, Having trouble creating a quality barcode:\n" + error);
+}
+
 
