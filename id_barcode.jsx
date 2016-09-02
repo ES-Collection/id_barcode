@@ -360,7 +360,7 @@ function getStandardSettings(){
                     codeFont          : "OCR B Std\tRegular",
                     isbnFontTracking  : 0,
                     whiteBox          : true,
-                    alignTo           : "Page Margins",
+                    alignTo           : "Selection",
                     refPoint          : "BOTTOM_RIGHT_ANCHOR",
                     offset            : { x : 0, y : 0 },
                     heightPercent     : 60 }
@@ -557,13 +557,40 @@ function find(haystack, needle) {
     for (var i = 0; i < haystack.length; i++) {
         if(haystack[i] == needle) return i;
     }
-    return -1;
+    return 0; // Return the first element if nothing is found
 }
 
 function calcOffset(itemBounds, page, Settings){
 
   var ib = getBoundsInfo(itemBounds);
   var pb = getBoundsInfo(page.bounds);
+
+  if(Settings.alignTo == "Selection"){
+    var selectionBounds = app.selection[0].visibleBounds;
+    for(var i=1;i<app.selection.length;i++){
+      switch (app.selection[i].constructor.name){
+        case "Rectangle":
+        case "TextFrame":
+        case "Oval":
+        case "Polygon":
+        case "GraphicLine":
+        case "Group":
+        case "PageItem":
+          itemBounds = app.selection[i].visibleBounds; //array [y1, x1, y2, x2], [top, left, bottom, right]
+          if(itemBounds[0] < selectionBounds[0]){ selectionBounds[0] = itemBounds[0]; }
+          if(itemBounds[1] < selectionBounds[1]){ selectionBounds[1] = itemBounds[1]; }
+          if(itemBounds[2] > selectionBounds[2]){ selectionBounds[2] = itemBounds[2]; }
+          if(itemBounds[3] > selectionBounds[3]){ selectionBounds[3] = itemBounds[2]; }
+          break;
+        default:
+          break;
+      }
+    }
+    // Now lets add it to the offsets
+    Settings.offset.x += selectionBounds[1];
+    Settings.offset.y += selectionBounds[0];
+    pb = getBoundsInfo(selectionBounds);
+  }
 
   function addToBounds(b, x, y) {
     b[0] += y; //topLeftY
@@ -722,11 +749,14 @@ function calcOffset(itemBounds, page, Settings){
   }
 
   // Add UI bound offset
-  //ib.bounds = addToBounds(ib.bounds, Settings.offset.x, Settings.offset.y);
+  ib.bounds = addToBounds(ib.bounds, Settings.offset.x, Settings.offset.y);
   return ib.bounds;
 }
 
 function showDialog(Settings) {
+
+  var selectionBounds, pageBounds, marginBounds = [0,0,0,0];
+
   if ( (Settings === null) || (typeof Settings !== 'object') ) {
     var Settings = getStandardSettings();
   }
@@ -735,6 +765,7 @@ function showDialog(Settings) {
 
   var selectionBounds, pageBounds, marginBounds = [0,0,0,0];
   var alignToOptions = ["Page", "Page Margins"];
+
   var docunits = "mm";
   var list_of_pages = ["1"];
 
@@ -750,6 +781,23 @@ function showDialog(Settings) {
           Settings.pageIndex = j;
           break;
         }
+      }
+    }
+
+    // Check if there is a selection
+    if( app.selection.length > 0 ) {
+      switch (app.selection[0].constructor.name){
+        case "Rectangle":
+        case "TextFrame":
+        case "Oval":
+        case "Polygon":
+        case "GraphicLine":
+        case "Group":
+        case "PageItem":
+          alignToOptions.push("Selection");
+          break;
+        default:
+          break;
       }
     }
   }
