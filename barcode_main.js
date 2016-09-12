@@ -12,7 +12,7 @@ function getStandardSettings(){
                     isbnFontTracking  : 0,
                     whiteBox          : true,
                     alignTo           : "Selection",
-                    refPoint          : "BOTTOM_RIGHT_ANCHOR",
+                    refPoint          : "TOP_LEFT_ANCHOR",
                     offset            : { x : 0, y : 0 },
                     heightPercent     : 60 }
   
@@ -470,12 +470,18 @@ function showDialog(Settings) {
 
   input.add('statictext', undefined, 'Addon (optional):');
   var addonText = input.add('edittext');
-  addonText.characters = 10;
+  addonText.characters = 5;
   addonText.text = Settings.addon;
 
-  input.add('statictext', undefined, 'Page:');
+  var pageSelectPrefix = input.add('statictext', undefined, 'Page:');
   var pageSelect = input.add('dropdownlist', undefined, list_of_pages);
   pageSelect.selection = pageSelect.items[Settings.pageIndex];
+
+  if(Settings.doc == undefined) {
+    // Don't show page select when there is no document open
+    pageSelect.visible = false;
+    pageSelectPrefix.visible = false;
+  }
 
   var fontPanel = dialog.add("panel", undefined, "Fonts");
   fontPanel.margins = 20;
@@ -546,7 +552,6 @@ function showDialog(Settings) {
 
   setSelectedReferencePoint(Settings.refPoint);
   // END REF SQUARE GROUP //
-
 
   var optionPanel = refPanel.add("group");
   optionPanel.alignChildren = "top";
@@ -680,12 +685,13 @@ function showDialog(Settings) {
     Settings.offset        = { x : parseFloat(offsetX.text), y : parseFloat(offsetY.text) };
     Settings.pageIndex     = pageSelect.selection.index;
     
-    if( (Settings.addon != "") && (Settings.addon.length != 5) ){
-      alert("Addon should be 5 digits long\nIs " + Settings.addon.length );
+    if( (Settings.addon != "") && (Settings.addon.length > 5) ){
+      alert("Addon should be 5 digits or less.\nLength is: " + Settings.addon.length );
       return showDialog(Settings); // Restart
     }
+
     if( !checkCheckDigit(Settings.isbn) ) {
-      alert("Not a valid ISBN\n(Check digit does not match)");
+      alert("Check digit does not match.\n" + Settings.isbn);
       return showDialog(Settings); // Restart
     }
 
@@ -730,7 +736,7 @@ var BarcodeDrawer = (function () {
   function drawBox(x, y, width, height, colour) {
     x *= scale;
     y *= scale;
-    width *= scale
+    width *= scale;
     height *= scale;
     var rect = page.rectangles.add();
     rect.strokeWeight = 0;
@@ -739,10 +745,41 @@ var BarcodeDrawer = (function () {
     return rect;
   }
 
-  function getCurrentOrNewDocument() {
+  function getCurrentOrNewDocument(Settings, size) {
     var doc = app.documents[0];
     if (!doc.isValid) {
+      
+      var originalMarginPreference = {
+        top    : app.marginPreferences.top,
+        left   : app.marginPreferences.left,
+        bottom : app.marginPreferences.bottom,
+        right  : app.marginPreferences.right
+      };
+
+      app.marginPreferences.top    = 0;
+      app.marginPreferences.left   = 0;
+      app.marginPreferences.bottom = 0;
+      app.marginPreferences.right  = 0;
+
       doc = app.documents.add();
+
+      doc.viewPreferences.horizontalMeasurementUnits = MeasurementUnits.MILLIMETERS;
+      doc.viewPreferences.verticalMeasurementUnits   = MeasurementUnits.MILLIMETERS;
+      doc.viewPreferences.rulerOrigin                = RulerOrigin.pageOrigin;
+
+      doc.documentPreferences.facingPages      = false;
+      doc.documentPreferences.pagesPerDocument = 1;
+
+      if (typeof size != "undefined") {
+        doc.documentPreferences.pageWidth   = size.width;
+        doc.documentPreferences.pageHeight  = size.height;
+      }
+
+      //Reset the application default margin preferences to their former state.
+      app.marginPreferences.top    = originalMarginPreference.top   ;
+      app.marginPreferences.left   = originalMarginPreference.left  ;
+      app.marginPreferences.bottom = originalMarginPreference.bottom;
+      app.marginPreferences.right  = originalMarginPreference.right ;
     }
     return doc;
   }
@@ -927,8 +964,27 @@ var BarcodeDrawer = (function () {
     devider = 1/reduce;
     hpos = 10;
     vOffset = 10;
+  }
 
-    doc = getCurrentOrNewDocument();
+  function getSize(addonWidths){
+    var width = 112;
+    if(addonWidths) {
+      width = 170;
+    }
+    var height = normalHeight + 22;
+    return {  width : width * scale, height : height * scale };
+  }
+
+  function drawBarcode(Settings) {
+    var barcode = Barcode().init(Settings);
+    var barWidths = barcode.getNormalisedWidths();
+    var addonWidths = barcode.getNormalisedAddon();
+
+    init(Settings);
+    
+    var size = getSize(addonWidths);
+    
+    doc = getCurrentOrNewDocument(Settings, size);
     // Save data in doc so we can load this back into UI
     doc.insertLabel('id_barcode_settings', Settings.toSource() );
 
@@ -941,21 +997,20 @@ var BarcodeDrawer = (function () {
     originalRulers = setRuler(doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
     
     layer = doc.layers.item('barcode');
+    
     if (layer.isValid) {
       layer.remove();
     }
+
     doc.layers.add({name: 'barcode'});
     layer = doc.layers.item('barcode');
 
     bgSwatchName = 'None';
+
     if(Settings.whiteBox){
       bgSwatchName = 'Paper';
     }
 
-  }
-
-  function drawBarcode(barWidths, addonWidths, Settings) {
-    init(Settings);
     drawWhiteBox(!!addonWidths);
     
     var textBox = drawText(hpos - 7, vOffset - 8, 102, 6.5, 
@@ -996,10 +1051,7 @@ function main(Settings){
   var newSettings = showDialog(Settings);
   if (newSettings) {
       try {
-        var barcode = Barcode().init(Settings);
-        var barWidths = barcode.getNormalisedWidths();
-        var addonWidths = barcode.getNormalisedAddon();
-        BarcodeDrawer.drawBarcode(barWidths, addonWidths, newSettings);
+        BarcodeDrawer.drawBarcode(newSettings);
       } catch( error ) {
         // Alert nice error
         alert("Oops, Having trouble creating a quality barcode:\n" + error);

@@ -50,7 +50,6 @@ var checkCheckDigit = function(str) {
     }
 }
 
-
 var Barcode = function () {
   var barcode_string;
   var addon_string;
@@ -96,8 +95,8 @@ var Barcode = function () {
 
       if (addonStr) {
         addon_string = stripAddon(addonStr);
-        if(addon_string.length != 5) {
-        	throw "Addon should be 5 digits long, but is " + addon_string.length;
+        if(addon_string.length > 5) {
+        	throw "Addon should be 5 digits or less.\nLength is: " + addon_string.length;
         }
       }
 
