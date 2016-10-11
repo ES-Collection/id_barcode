@@ -458,10 +458,15 @@ function showDialog(Settings) {
   //Settings.isbn  = '978-1-907360-21-3';
   //Settings.addon = '50995';
 
-  var dialog = new Window('dialog', 'New barcode');
+  var dialog = new Window('dialog', 'Place New Barcode');
   dialog.orientation = 'column';
-  dialog.alignChildren = 'left';
-  var input = dialog.add('group');
+  dialog.alignChildren = 'right';
+  var input = dialog.add('panel', undefined, 'Barcode:');
+  input.margins = 20;
+  input.alignment = "fill";
+  input.alignChildren = "left";
+  input.orientation = 'row';
+  
   input.add('statictext', undefined, 'ISBN:');
   var edittext = input.add('edittext');
   edittext.characters = 15;
@@ -485,6 +490,7 @@ function showDialog(Settings) {
 
   var fontPanel = dialog.add("panel", undefined, "Fonts");
   fontPanel.margins = 20;
+  fontPanel.alignment = "fill";
   fontPanel.alignChildren = "left";
   fontPanel.orientation = 'column';
   fontPanel.add('statictext', undefined, 'Human-readable');
@@ -605,9 +611,10 @@ function showDialog(Settings) {
 
   var buttonGroup = dialog.add('group');
       buttonGroup.orientation = 'row';
+      buttonGroup.alignment = 'right';
       buttonGroup.margins = 10;
-      buttonGroup.add('button', undefined, 'OK', {name: 'ok'});
       buttonGroup.add('button', undefined, 'Cancel', {name: 'cancel'});
+      buttonGroup.add('button', undefined, 'OK', {name: 'ok'});
 
   function clearSelectedReferencePoint(){
     for(var i = 0; i < 3; i++){
