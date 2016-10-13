@@ -1,4 +1,36 @@
-﻿function log(text) {
+﻿// Production steps of ECMA-262, Edition 5, 15.4.4.21
+// Reference: http://es5.github.io/#x15.4.4.21
+if (!Array.prototype.reduce) {
+  Array.prototype.reduce = function(callback /*, initialValue*/) {
+    'use strict';
+    if (this === null) {
+      throw new TypeError('Array.prototype.reduce called on null or undefined');
+    }
+    if (typeof callback !== 'function') {
+      throw new TypeError(callback + ' is not a function');
+    }
+    var t = Object(this), len = t.length >>> 0, k = 0, value;
+    if (arguments.length == 2) {
+      value = arguments[1];
+    } else {
+      while (k < len && !(k in t)) {
+        k++; 
+      }
+      if (k >= len) {
+        throw new TypeError('Reduce of empty array with no initial value');
+      }
+      value = t[k++];
+    }
+    for (; k < len; k++) {
+      if (k in t) {
+        value = callback(value, t[k], k, t);
+      }
+    }
+    return value;
+  };
+}
+
+function log(text) {
   $.writeln(text);
 }
 
@@ -16,7 +48,7 @@ var checkCheckDigit = function(str) {
 
     str = str.replace(/[^0-9X]/gi, '');
 
-    if (str.length != 10 && str.length != 13) {
+    if (str.length != 10 && str.length != 13 && str.length != 7) {
         return false;
     }
 
@@ -48,6 +80,20 @@ var checkCheckDigit = function(str) {
         }
         return (check == str[str.length-1].toUpperCase());
     }
+}
+
+function calculateCheckDigitForISSN(digits) {
+  var result = digits.split('')
+          .reverse()
+          .reduce(function (sum, value, index) {
+            return sum + (value * (index + 2));
+          }, 0) % 11;
+
+  var checkDigit = (result === 0) ? 0 : 11 - result;
+  if (checkDigit === 10) {
+    checkDigit = 'X';
+  }
+  return checkDigit.toString();
 }
 
 var Barcode = function () {

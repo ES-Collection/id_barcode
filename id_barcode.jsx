@@ -1,4 +1,36 @@
-﻿function log(text) {
+﻿// Production steps of ECMA-262, Edition 5, 15.4.4.21
+// Reference: http://es5.github.io/#x15.4.4.21
+if (!Array.prototype.reduce) {
+  Array.prototype.reduce = function(callback /*, initialValue*/) {
+    'use strict';
+    if (this === null) {
+      throw new TypeError('Array.prototype.reduce called on null or undefined');
+    }
+    if (typeof callback !== 'function') {
+      throw new TypeError(callback + ' is not a function');
+    }
+    var t = Object(this), len = t.length >>> 0, k = 0, value;
+    if (arguments.length == 2) {
+      value = arguments[1];
+    } else {
+      while (k < len && !(k in t)) {
+        k++; 
+      }
+      if (k >= len) {
+        throw new TypeError('Reduce of empty array with no initial value');
+      }
+      value = t[k++];
+    }
+    for (; k < len; k++) {
+      if (k in t) {
+        value = callback(value, t[k], k, t);
+      }
+    }
+    return value;
+  };
+}
+
+function log(text) {
   $.writeln(text);
 }
 
@@ -16,7 +48,7 @@ var checkCheckDigit = function(str) {
 
     str = str.replace(/[^0-9X]/gi, '');
 
-    if (str.length != 10 && str.length != 13) {
+    if (str.length != 10 && str.length != 13 && str.length != 7) {
         return false;
     }
 
@@ -48,6 +80,20 @@ var checkCheckDigit = function(str) {
         }
         return (check == str[str.length-1].toUpperCase());
     }
+}
+
+function calculateCheckDigitForISSN(digits) {
+  var result = digits.split('')
+          .reverse()
+          .reduce(function (sum, value, index) {
+            return sum + (value * (index + 2));
+          }, 0) % 11;
+
+  var checkDigit = (result === 0) ? 0 : 11 - result;
+  if (checkDigit === 10) {
+    checkDigit = 'X';
+  }
+  return checkDigit.toString();
 }
 
 var Barcode = function () {
@@ -349,10 +395,13 @@ function FontSelect(group, font) {
 }
 
 
+// More info here: http://www.barcodeisland.com/ean13.phtml
+
 function getStandardSettings(){
 
   var Settings = {  doc               : undefined,
                     pageIndex         : -1,
+                    EAN_Type          : "EAN-13",
                     isbn              : "",
                     addon             : "",
                     isbnFont          : "OCR B Std\tRegular", // Setting tracking to -100 is nice for this font
@@ -362,6 +411,7 @@ function getStandardSettings(){
                     alignTo           : "Selection",
                     refPoint          : "TOP_LEFT_ANCHOR",
                     offset            : { x : 0, y : 0 },
+                    humanReadableStr  : "",
                     heightPercent     : 60 }
   
   if (app.documents.length == 0) return Settings;
@@ -764,7 +814,7 @@ function showDialog(Settings) {
 
   var selectionBounds, pageBounds, marginBounds = [0,0,0,0];
   var alignToOptions = ["Page", "Page Margins"];
-
+  var EAN_Type_Options = ["EAN-13","ISBN","ISSN","IMSN"];
   var docunits = "mm";
   var list_of_pages = ["1"];
 
@@ -801,21 +851,25 @@ function showDialog(Settings) {
     }
   }
   
-  
   //just for testing
   //Settings.isbn  = '978-1-907360-21-3';
   //Settings.addon = '50995';
 
-  var dialog = new Window('dialog', 'Place New Barcode');
+  var dialog = new Window('dialog', 'New EAN-13 Barcode');
   dialog.orientation = 'column';
   dialog.alignChildren = 'right';
+  
   var input = dialog.add('panel', undefined, 'Barcode:');
   input.margins = 20;
   input.alignment = "fill";
   input.alignChildren = "left";
   input.orientation = 'row';
   
-  input.add('statictext', undefined, 'ISBN:');
+  // This does not do anything as they are all EAN-13, but not everyone knows that.
+  var typeDropdown = input.add("dropdownlist", undefined, EAN_Type_Options);
+  typeDropdown.selection = find(EAN_Type_Options, Settings.EAN_Type);
+  
+  //input.add('statictext', undefined, 'ISBN:');
   var edittext = input.add('edittext');
   edittext.characters = 15;
   edittext.active = true;
@@ -1049,7 +1103,25 @@ function showDialog(Settings) {
       alert("Check digit does not match.\n" + Settings.isbn);
       return showDialog(Settings); // Restart
     }
-
+    
+    var pureISBN = Settings.isbn.replace(/[^\dXx]+/g, '');
+    
+    if(pureISBN.length == 13){
+        if(pureISBN.substring(0, 3) == 977){
+            var ISSN = pureISBN.substring(3, 10);
+            Settings.humanReadableStr = "ISSN: " + String.fromCharCode(0x2007) + ISSN + calculateCheckDigitForISSN(ISSN);
+        } else if(pureISBN.substring(0, 3) == 978){
+            Settings.humanReadableStr = "ISBN: " + String.fromCharCode(0x2007) + Settings.isbn;
+        } else if(pureISBN.substring(0, 3) == 979){
+            Settings.humanReadableStr = "ISMN: " + String.fromCharCode(0x2007) + Settings.isbn;
+        } else {
+            Settings.humanReadableStr = ""; // Country or Coupon EAN-13
+        }
+    } else if(pureISBN.length == 10){
+        // ISBN-10
+        Settings.humanReadableStr = "ISBN: " + String.fromCharCode(0x2007) + Settings.isbn;
+    }
+    
     if( (Settings.isbnFont == null) || (Settings.codeFont == null) ){
         if(Settings.isbnFont == null) Settings.isbnFont = "";
         if(Settings.codeFont == null) Settings.codeFont = "";
@@ -1369,7 +1441,7 @@ var BarcodeDrawer = (function () {
     drawWhiteBox(!!addonWidths);
     
     var textBox = drawText(hpos - 7, vOffset - 8, 102, 6.5, 
-      "ISBN" + String.fromCharCode(0x2007) + Settings.isbn, Settings.isbnFont, 13, Justification.FULLY_JUSTIFIED, VerticalJustification.BOTTOM_ALIGN);
+      Settings.humanReadableStr, Settings.isbnFont, 13, Justification.FULLY_JUSTIFIED, VerticalJustification.BOTTOM_ALIGN);
 
     textBox.parentStory.otfFigureStyle = OTFFigureStyle.PROPORTIONAL_LINING;
     textBox.parentStory.kerningMethod = "Optical"; // Most fonts have bad kerning for all caps characters
