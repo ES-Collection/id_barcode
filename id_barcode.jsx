@@ -1,36 +1,4 @@
-﻿// Production steps of ECMA-262, Edition 5, 15.4.4.21
-// Reference: http://es5.github.io/#x15.4.4.21
-if (!Array.prototype.reduce) {
-  Array.prototype.reduce = function(callback /*, initialValue*/) {
-    'use strict';
-    if (this === null) {
-      throw new TypeError('Array.prototype.reduce called on null or undefined');
-    }
-    if (typeof callback !== 'function') {
-      throw new TypeError(callback + ' is not a function');
-    }
-    var t = Object(this), len = t.length >>> 0, k = 0, value;
-    if (arguments.length == 2) {
-      value = arguments[1];
-    } else {
-      while (k < len && !(k in t)) {
-        k++; 
-      }
-      if (k >= len) {
-        throw new TypeError('Reduce of empty array with no initial value');
-      }
-      value = t[k++];
-    }
-    for (; k < len; k++) {
-      if (k in t) {
-        value = callback(value, t[k], k, t);
-      }
-    }
-    return value;
-  };
-}
-
-function log(text) {
+﻿function log(text) {
   $.writeln(text);
 }
 
@@ -38,7 +6,7 @@ var checkCheckDigit = function(str) {
     // Check ISBN as found here:
     // http://stackoverflow.com/questions/11104439/how-do-i-check-if-an-input-contains-an-isbn-using-javascript/
 
-    var str = String(str);
+    var str = String(str).replace(/[^0-9X]/gi, '');
 
     var sum,
         weight,
@@ -46,13 +14,8 @@ var checkCheckDigit = function(str) {
         check,
         i;
 
-    str = str.replace(/[^0-9X]/gi, '');
-
-    if (str.length != 10 && str.length != 13 && str.length != 7) {
-        return false;
-    }
-
     if (str.length == 13) {
+        // ISBN-13 or padded ISSN
         sum = 0;
         for (i = 0; i < 12; i++) {
             digit = parseInt(str[i]);
@@ -65,9 +28,10 @@ var checkCheckDigit = function(str) {
         check = (10 - (sum % 10)) % 10;
         return (check == str[str.length-1]);
     }
-
-    if (str.length == 10) {
-        weight = 10;
+    
+    if (str.length == 10 || str.length == 7) {
+        // ISBN-10 or ISSN
+        weight = str.length;
         sum = 0;
         for (i = 0; i < 9; i++) {
             digit = parseInt(str[i]);
@@ -80,20 +44,31 @@ var checkCheckDigit = function(str) {
         }
         return (check == str[str.length-1].toUpperCase());
     }
+
+    return false;
 }
 
-function calculateCheckDigitForISSN(digits) {
-  var result = digits.split('')
-          .reverse()
-          .reduce(function (sum, value, index) {
-            return sum + (value * (index + 2));
-          }, 0) % 11;
+function calculateCheckDigit(digits) {
+  // For ISBN-10 and ISSN
+  var digits = String(digits);
+  var checkDigit;
 
-  var checkDigit = (result === 0) ? 0 : 11 - result;
-  if (checkDigit === 10) {
-    checkDigit = 'X';
+  if (digits.length == 7 || digits.length == 10) {
+      weight = digits.length;
+      sum = 0;
+      for (i = 0; i < 9; i++) {
+          digit = parseInt(digits[i]);
+          sum += weight*digit;
+          weight--;
+      }
+      check = 11 - (sum % 11);
+      if (check == 10) {
+          check = 'X';
+      }
+      return check.toString();
   }
-  return checkDigit.toString();
+
+  return '';
 }
 
 var Barcode = function () {
@@ -421,9 +396,13 @@ function getStandardSettings(){
   if (Settings.doc.isValid) {
       var tempData = Settings.doc.extractLabel('id_barcode_settings'); //Always returns a string
       if(tempData.length > 0){
-          tempData = eval(tempData);
-          if( typeof tempData == 'object') {
-              Settings = tempData;
+          try {
+            tempData = eval(tempData);
+            if( typeof tempData == 'object') {
+                Settings = tempData;
+            }
+          } catch (nothing) {
+            return Settings;
           }
       }
   }
@@ -875,6 +854,8 @@ function showDialog(Settings) {
   edittext.active = true;
   edittext.text = Settings.isbn;
 
+  edittext.onChange = function () { edittext.text = edittext.text.replace(/ +/g, "-") }
+
   input.add('statictext', undefined, 'Addon (optional):');
   var addonText = input.add('edittext');
   addonText.characters = 5;
@@ -1109,7 +1090,7 @@ function showDialog(Settings) {
     if(pureISBN.length == 13){
         if(pureISBN.substring(0, 3) == 977){
             var ISSN = pureISBN.substring(3, 10);
-            Settings.humanReadableStr = "ISSN: " + String.fromCharCode(0x2007) + ISSN + calculateCheckDigitForISSN(ISSN);
+            Settings.humanReadableStr = "ISSN: " + String.fromCharCode(0x2007) + ISSN + calculateCheckDigit(ISSN);
         } else if(pureISBN.substring(0, 3) == 978){
             Settings.humanReadableStr = "ISBN: " + String.fromCharCode(0x2007) + Settings.isbn;
         } else if(pureISBN.substring(0, 3) == 979){
@@ -1481,7 +1462,7 @@ function main(Settings){
         BarcodeDrawer.drawBarcode(newSettings);
       } catch( error ) {
         // Alert nice error
-        alert("Oops, Having trouble creating a quality barcode:\n" + error);
+        alert("Oops, Having trouble creating a quality barcode:\n" + "Line " + error.line + ": " + error);
         // Restart UI so we can either correct the ISBN or select a valid font
         main(newSettings);
       }
@@ -1491,7 +1472,7 @@ function main(Settings){
 try {
   main(getStandardSettings());  
 } catch ( error ) {
-  alert("Oops, Having trouble creating a quality barcode:\n" + error);
+  alert("Oops, Having trouble creating a quality barcode:\n" + "Line " + error.line + ": " + error);
 }
 
 

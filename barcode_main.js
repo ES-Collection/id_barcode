@@ -27,9 +27,13 @@ function getStandardSettings(){
   if (Settings.doc.isValid) {
       var tempData = Settings.doc.extractLabel('id_barcode_settings'); //Always returns a string
       if(tempData.length > 0){
-          tempData = eval(tempData);
-          if( typeof tempData == 'object') {
-              Settings = tempData;
+          try {
+            tempData = eval(tempData);
+            if( typeof tempData == 'object') {
+                Settings = tempData;
+            }
+          } catch (nothing) {
+            return Settings;
           }
       }
   }
@@ -481,6 +485,8 @@ function showDialog(Settings) {
   edittext.active = true;
   edittext.text = Settings.isbn;
 
+  edittext.onChange = function () { edittext.text = edittext.text.replace(/ +/g, "-") }
+
   input.add('statictext', undefined, 'Addon (optional):');
   var addonText = input.add('edittext');
   addonText.characters = 5;
@@ -715,7 +721,7 @@ function showDialog(Settings) {
     if(pureISBN.length == 13){
         if(pureISBN.substring(0, 3) == 977){
             var ISSN = pureISBN.substring(3, 10);
-            Settings.humanReadableStr = "ISSN: " + String.fromCharCode(0x2007) + ISSN + calculateCheckDigitForISSN(ISSN);
+            Settings.humanReadableStr = "ISSN: " + String.fromCharCode(0x2007) + ISSN + calculateCheckDigit(ISSN);
         } else if(pureISBN.substring(0, 3) == 978){
             Settings.humanReadableStr = "ISBN: " + String.fromCharCode(0x2007) + Settings.isbn;
         } else if(pureISBN.substring(0, 3) == 979){
@@ -1087,7 +1093,7 @@ function main(Settings){
         BarcodeDrawer.drawBarcode(newSettings);
       } catch( error ) {
         // Alert nice error
-        alert("Oops, Having trouble creating a quality barcode:\n" + error);
+        alert("Oops, Having trouble creating a quality barcode:\n" + "Line " + error.line + ": " + error);
         // Restart UI so we can either correct the ISBN or select a valid font
         main(newSettings);
       }
@@ -1097,7 +1103,7 @@ function main(Settings){
 try {
   main(getStandardSettings());  
 } catch ( error ) {
-  alert("Oops, Having trouble creating a quality barcode:\n" + error);
+  alert("Oops, Having trouble creating a quality barcode:\n" + "Line " + error.line + ": " + error);
 }
 
 
