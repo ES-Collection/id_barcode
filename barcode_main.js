@@ -721,17 +721,17 @@ function showDialog(Settings) {
     if(pureISBN.length == 13){
         if(pureISBN.substring(0, 3) == 977){
             var ISSN = pureISBN.substring(3, 10);
-            Settings.humanReadableStr = "ISSN: " + String.fromCharCode(0x2007) + ISSN + calculateCheckDigit(ISSN);
+            Settings.humanReadableStr = "ISSN:" + String.fromCharCode(0x2007) + ISSN + calculateCheckDigit(ISSN);
         } else if(pureISBN.substring(0, 3) == 978){
-            Settings.humanReadableStr = "ISBN: " + String.fromCharCode(0x2007) + Settings.isbn;
+            Settings.humanReadableStr = "ISBN:" + String.fromCharCode(0x2007) + Settings.isbn;
         } else if(pureISBN.substring(0, 3) == 979){
-            Settings.humanReadableStr = "ISMN: " + String.fromCharCode(0x2007) + Settings.isbn;
+            Settings.humanReadableStr = "ISMN:" + String.fromCharCode(0x2007) + Settings.isbn;
         } else {
             Settings.humanReadableStr = ""; // Country or Coupon EAN-13
         }
     } else if(pureISBN.length == 10){
         // ISBN-10
-        Settings.humanReadableStr = "ISBN: " + String.fromCharCode(0x2007) + Settings.isbn;
+        Settings.humanReadableStr = "ISBN:" + String.fromCharCode(0x2007) + Settings.isbn;
     }
     
     if( (Settings.isbnFont == null) || (Settings.codeFont == null) ){
@@ -927,43 +927,53 @@ var BarcodeDrawer = (function () {
     var fontSize  = textStyle.pointSize;
     if (fitText) {
       // Fit type to box
+      textBox.parentStory.alignToBaseline = false;
       var safetyCounter = 0;
       //Keep reducing fontsize until no more overset text
       while (textBox.overflows && safetyCounter < 100) {
+        safetyCounter++;
         if(fontSize > 1) {
           fontSize -= 0.25;
-          textStyle.pointSize = fontSize;
+          textBox.parentStory.pointSize = fontSize;
         } else {
           continue;
         }
-        safetyCounter++;
       }
     }
     if (fitBox) {
-      // Fit frame to type
-      textBox.textFramePreferences.autoSizingReferencePoint = AutoSizingReferenceEnum.TOP_LEFT_POINT;
-      textBox.textFramePreferences.autoSizingType = AutoSizingTypeEnum.WIDTH_ONLY;
+      try {
+        // Fit frame to type
+        textBox.textFramePreferences.autoSizingReferencePoint = AutoSizingReferenceEnum.TOP_LEFT_POINT;
+        textBox.textFramePreferences.autoSizingType = AutoSizingTypeEnum.WIDTH_ONLY;
+      } catch (err) {
+        alert("Barcode: fitTextBox: Could not fit text box." + err.description);
+      }
     }
     return fontSize;
   }
 
   function drawText(x, y, boxWidth, boxHeight, text, font, fontSize, textAlign, frameAlign) {
-    x *= scale;
-    y *= scale;
-    boxWidth *= scale;
-    boxHeight *= scale;
-    var textBox = page.textFrames.add();
-    textBox.contents = text;
-    textBox.textFramePreferences.verticalJustification = frameAlign;
-    var textStyle = textBox.textStyleRanges[0];
-    textStyle.appliedFont = font;
-    textStyle.pointSize = fontSize;
-    textStyle.justification = textAlign;
-    textBox.geometricBounds = [y, x, y + boxHeight, x + boxWidth];
-    // We don't want the numbers to hang outside the textframe!
-    textBox.parentStory.storyPreferences.opticalMarginAlignment = false;
-    // Always return the textbox
-    return textBox;
+    try {
+      x *= scale;
+      y *= scale;
+      boxWidth *= scale;
+      boxHeight *= scale;
+      var textBox = page.textFrames.add();
+      textBox.contents = text;
+      textBox.textFramePreferences.verticalJustification = frameAlign;
+      var textStyle = textBox.textStyleRanges[0];
+      textStyle.appliedFont = font;
+      textStyle.pointSize = fontSize;
+      textStyle.justification = textAlign;
+      textBox.geometricBounds = [y, x, y + boxHeight, x + boxWidth];
+      // We don't want the numbers to hang outside the textframe!
+      textBox.parentStory.storyPreferences.opticalMarginAlignment = false;
+      // Always return the textbox
+      return textBox;
+    } catch (err) {
+      alert("Barcode: drawText: " + err);
+      return null;
+    }
   }
 
   function drawChar(x, character, font, fontSize, fitBox) {
@@ -971,10 +981,13 @@ var BarcodeDrawer = (function () {
     var boxWidth = 7;
     var boxHeight = 9;
     var textBox = drawText(x, y, boxWidth, boxHeight, character, font, fontSize, Justification.LEFT_ALIGN, VerticalJustification.TOP_ALIGN);
+    	textBox.parentStory.alignToBaseline = false;
     // We don't want lining figures!
-    textBox.parentStory.otfFigureStyle = OTFFigureStyle.TABULAR_LINING;
-    // Set standard to capheight so alignment is more consistent between different fonts
-    textBox.textFramePreferences.firstBaselineOffset = FirstBaseline.CAP_HEIGHT;
+    try {
+      textBox.parentStory.otfFigureStyle = OTFFigureStyle.TABULAR_LINING;
+    } catch (e) {
+      // Not OTF
+    }
     if(fitBox) {
       fitTextBox(textBox, false, true);
     }
@@ -1055,11 +1068,13 @@ var BarcodeDrawer = (function () {
     var textBox = drawText(hpos - 7, vOffset - 8, 102, 6.5, 
       Settings.humanReadableStr, Settings.isbnFont, 13, Justification.FULLY_JUSTIFIED, VerticalJustification.BOTTOM_ALIGN);
 
-    textBox.parentStory.otfFigureStyle = OTFFigureStyle.PROPORTIONAL_LINING;
-    textBox.parentStory.kerningMethod = "Optical"; // Most fonts have bad kerning for all caps characters
-    textBox.parentStory.tracking = Settings.isbnFontTracking;
-    textBox.textFramePreferences.firstBaselineOffset = FirstBaseline.FIXED_HEIGHT;
-    textBox.textFramePreferences.minimumFirstBaselineOffset = 0;
+    try {
+      textBox.parentStory.otfFigureStyle = OTFFigureStyle.PROPORTIONAL_LINING;
+      textBox.parentStory.kerningMethod = "Optical"; // Most fonts have bad kerning for all caps characters
+      textBox.parentStory.tracking = Settings.isbnFontTracking;
+    } catch (e) {
+      alert("Warning setting story preferences: " + e);
+    }
 
     fitTextBox(textBox, true, false);
 
