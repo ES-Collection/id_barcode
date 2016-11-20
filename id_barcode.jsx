@@ -384,6 +384,7 @@ function getStandardSettings(){
                     isbnFontTracking  : 0,
                     whiteBox          : true,
                     alignTo           : "Selection",
+                    selectionBounds   : [0,0,0,0],
                     refPoint          : "TOP_LEFT_ANCHOR",
                     offset            : { x : 0, y : 0 },
                     humanReadableStr  : "",
@@ -594,7 +595,6 @@ function calcOffset(itemBounds, page, Settings){
   var pb = getBoundsInfo(page.bounds);
 
   if(Settings.alignTo == "Selection"){
-    var selectionBounds = app.selection[0].visibleBounds;
     for(var i=1;i<app.selection.length;i++){
       switch (app.selection[i].constructor.name){
         case "Rectangle":
@@ -605,19 +605,19 @@ function calcOffset(itemBounds, page, Settings){
         case "Group":
         case "PageItem":
           itemBounds = app.selection[i].visibleBounds; //array [y1, x1, y2, x2], [top, left, bottom, right]
-          if(itemBounds[0] < selectionBounds[0]){ selectionBounds[0] = itemBounds[0]; }
-          if(itemBounds[1] < selectionBounds[1]){ selectionBounds[1] = itemBounds[1]; }
-          if(itemBounds[2] > selectionBounds[2]){ selectionBounds[2] = itemBounds[2]; }
-          if(itemBounds[3] > selectionBounds[3]){ selectionBounds[3] = itemBounds[2]; }
+          if(itemBounds[0] < Settings.selectionBounds[0]){ Settings.selectionBounds[0] = itemBounds[0]; }
+          if(itemBounds[1] < Settings.selectionBounds[1]){ Settings.selectionBounds[1] = itemBounds[1]; }
+          if(itemBounds[2] > Settings.selectionBounds[2]){ Settings.selectionBounds[2] = itemBounds[2]; }
+          if(itemBounds[3] > Settings.selectionBounds[3]){ Settings.selectionBounds[3] = itemBounds[2]; }
           break;
         default:
           break;
       }
     }
     // Now lets add it to the offsets
-    Settings.offset.x += selectionBounds[1];
-    Settings.offset.y += selectionBounds[0];
-    pb = getBoundsInfo(selectionBounds);
+    Settings.offset.x += Settings.selectionBounds[1];
+    Settings.offset.y += Settings.selectionBounds[0];
+    pb = getBoundsInfo(Settings.selectionBounds);
   }
 
   function addToBounds(b, x, y) {
@@ -1090,17 +1090,17 @@ function showDialog(Settings) {
     if(pureISBN.length == 13){
         if(pureISBN.substring(0, 3) == 977){
             var ISSN = pureISBN.substring(3, 10);
-            Settings.humanReadableStr = "ISSN:" + String.fromCharCode(0x2007) + ISSN + calculateCheckDigit(ISSN);
+            Settings.humanReadableStr = "ISSN" + String.fromCharCode(0x2007) + ISSN + calculateCheckDigit(ISSN);
         } else if(pureISBN.substring(0, 3) == 978){
-            Settings.humanReadableStr = "ISBN:" + String.fromCharCode(0x2007) + Settings.isbn;
+            Settings.humanReadableStr = "ISBN" + String.fromCharCode(0x2007) + Settings.isbn;
         } else if(pureISBN.substring(0, 3) == 979){
-            Settings.humanReadableStr = "ISMN:" + String.fromCharCode(0x2007) + Settings.isbn;
+            Settings.humanReadableStr = "ISMN" + String.fromCharCode(0x2007) + Settings.isbn;
         } else {
             Settings.humanReadableStr = ""; // Country or Coupon EAN-13
         }
     } else if(pureISBN.length == 10){
         // ISBN-10
-        Settings.humanReadableStr = "ISBN:" + String.fromCharCode(0x2007) + Settings.isbn;
+        Settings.humanReadableStr = "ISBN" + String.fromCharCode(0x2007) + Settings.isbn;
     }
     
     if( (Settings.isbnFont == null) || (Settings.codeFont == null) ){
@@ -1110,6 +1110,12 @@ function showDialog(Settings) {
         return showDialog(Settings); // Restart
     }
 
+    if( Settings.alignTo == "Selection" ) {
+      Settings.selectionBounds = app.selection[0].visibleBounds; // TO DO, this should be bounds of all selected elements
+    } else {
+      Settings.selectionBounds = [0,0,0,0];
+    }
+    
     return Settings;
   }
   else {
@@ -1417,8 +1423,7 @@ var BarcodeDrawer = (function () {
 
     originalRulers = setRuler(doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
     
-    layer = doc.layers.item('barcode');
-    
+    layer = doc.layers.item('barcode');    
     if (layer.isValid) {
       layer.remove();
     }
