@@ -24,14 +24,21 @@ function getStandardSettings(){
   if (app.documents.length == 0) return Settings;
   // else
   Settings.doc = app.activeDocument;
-  
+
   if (Settings.doc.isValid) {
+      var tempData = Settings.doc.extractLabel('ISBN');
+      if(tempData.length > 0){
+        Settings.EAN_Type = "ISBN";
+        Settings.isbn = tempData;
+      }
       var tempData = Settings.doc.extractLabel('id_barcode_settings'); //Always returns a string
       if(tempData.length > 0){
           try {
             tempData = eval(tempData);
             if( typeof tempData == 'object') {
+              if( tempData.hasOwnProperty('EAN_Type') ) {
                 Settings = tempData;
+              }
             }
           } catch (nothing) {
             return Settings;
@@ -1045,6 +1052,8 @@ var BarcodeDrawer = (function () {
     doc = getCurrentOrNewDocument(Settings, size);
     // Save data in doc so we can load this back into UI
     doc.insertLabel('id_barcode_settings', Settings.toSource() );
+    // Save EAN-13 in a seperate label for other scripts to use
+    doc.insertLabel(Settings.EAN_Type, Settings.isbn );
 
     if( (Settings.pageIndex < 0) || (Settings.pageIndex > doc.pages.length-1) ) {
       page = doc.pages[0];
