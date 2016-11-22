@@ -1,4 +1,5 @@
-﻿#include 'barcode_library.js'
+﻿#include 'isbn.js'
+#include 'barcode_library.js'
 #include 'dropdown.js'
 
 // More info here: http://www.barcodeisland.com/ean13.phtml
@@ -492,7 +493,25 @@ function showDialog(Settings) {
   edittext.active = true;
   edittext.text = Settings.isbn;
 
-  edittext.onChange = function () { edittext.text = edittext.text.replace(/ +/g, "-") }
+  edittext.onChange = function () { 
+    var digits = edittext.text.replace(/\D/g,'');
+    try {
+      var isbn = ISBN.parse(digits);
+    } catch (err) {
+      alert(err);
+    }
+
+    if ( isbn && (isbn.isIsbn10() || isbn.isIsbn13()) ) {
+        var isbn13 = isbn.asIsbn13(digits);
+        edittext.text = ISBN.hyphenate(isbn13);
+        typeDropdown.selection = find(EAN_Type_Options, "ISBN");
+    } else {
+      typeDropdown.selection = find(EAN_Type_Options, "EAN-13");
+      edittext.text = edittext.text.replace(/ +/g, "-");
+      edittext.text = edittext.text.replace(/[A-Za-z]+/g, "");
+    }
+  
+  }
 
   input.add('statictext', undefined, 'Addon (optional):');
   var addonText = input.add('edittext');
