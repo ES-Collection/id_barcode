@@ -432,7 +432,7 @@ function showDialog(Settings) {
 
   var selectionBounds, pageBounds, marginBounds = [0,0,0,0];
   var alignToOptions = ["Page", "Page Margins"];
-  var EAN_Type_Options = ["EAN-13","ISBN","ISSN","IMSN"];
+  var EAN_Type_Options = ["EAN-13","ISBN","ISSN","ISMN"];
   var docunits = "mm";
   var list_of_pages = ["1"];
 
@@ -493,24 +493,73 @@ function showDialog(Settings) {
   edittext.active = true;
   edittext.text = Settings.isbn;
 
-  edittext.onChange = function () { 
-    var digits = edittext.text.replace(/\D/g,'');
-    try {
-      var isbn = ISBN.parse(digits);
-    } catch (err) {
-      alert(err);
-    }
+  edittext.onChange = function () {
+    var digits = edittext.text.replace(/[^\dXx]+/g, '');
+    if (digits.length == 8) {
+      // ISSN
+      edittext.text = digits.substring(0, 4) + "-" + digits.substring(4, 8);
+      typeDropdown.selection = find(EAN_Type_Options, "ISSN");
+      return;
 
-    if ( isbn && (isbn.isIsbn10() || isbn.isIsbn13()) ) {
-        var isbn13 = isbn.asIsbn13(digits);
-        edittext.text = ISBN.hyphenate(isbn13);
-        typeDropdown.selection = find(EAN_Type_Options, "ISBN");
-    } else {
-      typeDropdown.selection = find(EAN_Type_Options, "EAN-13");
-      edittext.text = edittext.text.replace(/ +/g, "-");
-      edittext.text = edittext.text.replace(/[A-Za-z]+/g, "");
-    }
-  
+    } else if (digits.length == 13) {
+
+      if( digits.substring(0, 3) == "977") {
+        // ISSN
+        edittext.text = "977-" + digits.substring(3, 7) + "-" + digits.substring(7, 10) + "-" + digits.substring(10, 12) + "-" + digits.substring(12, 13);
+        typeDropdown.selection = find(EAN_Type_Options, "ISSN");
+        return;
+
+      } else if ( digits.substring(0, 4) == "9790" ) { 
+        // ISMN
+        // All publisher elements must fit into the general number scheme:
+        /*  000 - 099
+            1000 - 3999
+            40000 - 69999
+            700000 - 899999
+            9000000 - 9999999 */
+        // http://www.ismn-international.org/tools.php
+
+        var pubStart = Number( digits.substring(4,5) );
+        var pubLen = 0;
+        if ( pubStart == 0 ) {
+          pubLen = 3;
+        } else if ( pubStart < 4) {
+          pubLen = 4;
+        } else if ( pubStart < 7) {
+          pubLen = 5;
+        } else if ( pubStart < 9) {
+          pubLen = 6;
+        } else if ( pubStart = 9) {
+          pubLen = 7;
+        }
+
+        if(pubLen != 0) {
+          edittext.text = "979-0-" + digits.substring(4, 4+pubLen) + "-" + digits.substring(4+pubLen,12) + "-" + digits.substring(12,13);
+          typeDropdown.selection = find(EAN_Type_Options, "ISMN");
+          return;
+        }
+
+      } else if ( digits.substring(0, 3) == "978" || digits.substring(0, 3) == "979") {
+        // ISBN
+        try {
+          var isbn = ISBN.parse(digits);
+        } catch (err) {
+          alert(err);
+        }
+        if ( isbn && (isbn.isIsbn10() || isbn.isIsbn13()) ) {
+            var isbn13 = isbn.asIsbn13(digits);
+            edittext.text = ISBN.hyphenate(isbn13);
+            typeDropdown.selection = find(EAN_Type_Options, "ISBN");
+            return;
+        }
+      }
+
+    } // End digits length == 13
+
+    // note returned yet...
+    typeDropdown.selection = find(EAN_Type_Options, "EAN-13");
+    edittext.text = edittext.text.replace(/ +/g, "-");
+    edittext.text = edittext.text.replace(/[^\dxX-]*/g, "").toUpperCase();
   }
 
   input.add('statictext', undefined, 'Addon (optional):');
@@ -732,32 +781,37 @@ function showDialog(Settings) {
     Settings.offset        = { x : parseFloat(offsetX.text), y : parseFloat(offsetY.text) };
     Settings.pageIndex     = pageSelect.selection.index;
     
+    var pureEAN13 = Settings.isbn.replace(/[^\dXx]+/g, '');
+
     if( (Settings.addon != "") && (Settings.addon.length > 5) ){
       alert("Addon should be 5 digits or less.\nLength is: " + Settings.addon.length );
       return showDialog(Settings); // Restart
     }
 
-    if( !checkCheckDigit(Settings.isbn) ) {
+    if( !checkCheckDigit(pureEAN13) ) {
       alert("Check digit does not match.\n" + Settings.isbn);
       return showDialog(Settings); // Restart
     }
     
-    var pureISBN = Settings.isbn.replace(/[^\dXx]+/g, '');
-    
-    if(pureISBN.length == 13){
-        if(pureISBN.substring(0, 3) == 977){
-            var ISSN = pureISBN.substring(3, 10);
-            Settings.humanReadableStr = "ISSN" + String.fromCharCode(0x2007) + ISSN + calculateCheckDigit(ISSN);
-        } else if(pureISBN.substring(0, 3) == 978){
-            Settings.humanReadableStr = "ISBN" + String.fromCharCode(0x2007) + Settings.isbn;
-        } else if(pureISBN.substring(0, 3) == 979){
+    if(pureEAN13.length == 13){
+        if(pureEAN13.substring(0, 3) == "977"){
+            var ISSN = pureEAN13.substring(3, 10);
+            Settings.humanReadableStr = "ISSN" + String.fromCharCode(0x2007) + ISSN.substring(0, 4) + "-" + ISSN.substring(4, 7) + calculateCheckDigit(ISSN);
+        } else if(pureEAN13.substring(0, 4) == "9790"){
             Settings.humanReadableStr = "ISMN" + String.fromCharCode(0x2007) + Settings.isbn;
+        } else if(pureEAN13.substring(0, 3) == "978" || pureEAN13.substring(0, 3) == "979" ){
+            Settings.humanReadableStr = "ISBN" + String.fromCharCode(0x2007) + Settings.isbn;
         } else {
             Settings.humanReadableStr = ""; // Country or Coupon EAN-13
         }
-    } else if(pureISBN.length == 10){
+    } else if(pureEAN13.length == 10){
         // ISBN-10
         Settings.humanReadableStr = "ISBN" + String.fromCharCode(0x2007) + Settings.isbn;
+    } else if(pureEAN13.length == 8){
+        // ISSN
+        Settings.humanReadableStr = "ISSN" + String.fromCharCode(0x2007) + Settings.isbn;
+        Settings.isbn = "977" + pureEAN13.substring(0, 7) + "00";
+        Settings.isbn = Settings.isbn + calculateCheckDigit(Settings.isbn+"X");
     }
     
     if( (Settings.isbnFont == null) || (Settings.codeFont == null) ){

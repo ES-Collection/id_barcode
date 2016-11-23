@@ -8,7 +8,8 @@ var checkCheckDigit = function(str) {
 
     var str = String(str).replace(/[^0-9X]/gi, '');
 
-    var sum,
+    var len,
+        sum,
         weight,
         digit,
         check,
@@ -16,8 +17,9 @@ var checkCheckDigit = function(str) {
 
     if (str.length == 13) {
         // ISBN-13 or padded ISSN
+        len = str.length-1;
         sum = 0;
-        for (i = 0; i < 12; i++) {
+        for (i = 0; i < len; i++) {
             digit = parseInt(str[i]);
             if (i % 2 == 1) {
                 sum += 3*digit;
@@ -26,49 +28,87 @@ var checkCheckDigit = function(str) {
             }
         }
         check = (10 - (sum % 10)) % 10;
-        return (check == str[str.length-1]);
+        if (check == 10) {
+            check = 'X';
+        }
+        return (check == str[str.length-1].toUpperCase());
     }
     
-    if (str.length == 10 || str.length == 7) {
-        // ISBN-10 or ISSN
+    if (str.length == 10 || str.length == 8) {
+        // ISBN-10 or unpadded ISSN
+        len = str.length-1;
         weight = str.length;
         sum = 0;
-        for (i = 0; i < 9; i++) {
-            digit = parseInt(str[i]);
-            sum += weight*digit;
-            weight--;
+        for (i = 0; i < len; i++) {
+          digit = parseInt(str[i]);
+          sum += (weight - i) * digit;
         }
-        check = 11 - (sum % 11);
+
+        check = (11 - sum % 11) % 11;
         if (check == 10) {
             check = 'X';
         }
         return (check == str[str.length-1].toUpperCase());
     }
 
+
+      sum = (11 - sum % 11) % 11;
+      return sum === 10 ? 'X' : String(c);
+
+
     return false;
 }
 
-function calculateCheckDigit(digits) {
-  // For ISBN-10 and ISSN
-  var digits = String(digits);
-  var checkDigit;
-
-  if (digits.length == 7 || digits.length == 10) {
-      weight = digits.length;
-      sum = 0;
-      for (i = 0; i < 9; i++) {
-          digit = parseInt(digits[i]);
-          sum += weight*digit;
-          weight--;
+function calculateCheckDigit(ean) {
+  var c, n, d;
+    if (ean.match(/^\d{9}[\dX]?$/)) {
+      // ISBN-10
+      c = 0;
+      for (n = 0; n < 9; n += 1) {
+        c += (10 - n) * ean.charAt(n);
       }
-      check = 11 - (sum % 11);
-      if (check == 10) {
-          check = 'X';
-      }
-      return check.toString();
-  }
+      c = (11 - c % 11) % 11;
+      return c === 10 ? 'X' : String(c);
 
-  return '';
+    } else if (ean.match(/(?:978|979|977)\d{9}[\dX]?/)) {
+      // ISBN-13 ISSN-13
+      c = 0;
+      for (n = 0; n < 12; n += 2) {
+        c += Number(ean.charAt(n)) + 3 * ean.charAt(n + 1);
+      }
+
+      //return String((10 - c % 10) % 10);
+      c = (10 - c % 10) % 10;
+      return c === 10 ? 'X' : String(c);
+    
+    } else if (ean.match(/^\d{7}[\dX]?$/)) {
+      //ISSN-8
+      /* Wrongly stated on http://www.issn.org/understanding-the-issn/issn-uses/identification-with-the-ean-13-barcode/
+      c = 0;
+      for (n = 0; n < 7; n++) {
+        d = Number(ean.charAt(n));
+        if (i % 2 == 1) {
+            // odd
+            c += 3*d;
+        } else {
+            // even
+            c += d;
+        }
+      }
+      c = 10 - (c % 10);
+      return c === 10 ? 'X' : String(c);
+      */
+      // Wikipedia is right for a change: https://en.wikipedia.org/wiki/International_Standard_Serial_Number
+      c = 0;
+      for (n = 0; n < 7; n += 1) {
+        c += (8 - n) * ean.charAt(n);
+      }
+      c = (11 - c % 11) % 11;
+      return c === 10 ? 'X' : String(c);
+
+    }
+
+    return null;
 }
 
 var Barcode = function () {

@@ -1,3 +1,5 @@
+//https://www.isbn-international.org/range_file_generation
+
 var ISBN = {
   VERSION: '0.01',
   GROUPS: {
