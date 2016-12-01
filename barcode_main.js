@@ -4,6 +4,8 @@
 
 // More info here: http://www.barcodeisland.com/ean13.phtml
 
+$.localize = true; // enable ExtendScript localisation engine
+
 function getStandardSettings(){
 
   var Settings = {  doc               : undefined,
@@ -799,8 +801,8 @@ function showDialog(Settings) {
     
     var pureEAN = Settings.isbn.replace(/[^\dXx]+/g, '');
 
-    if( (Settings.addon != "") && (Settings.addon.length > 5) ){
-      alert("Addon should be 5 digits or less.\nLength is: " + Settings.addon.length );
+    if( (Settings.addon != "") && (Settings.addon.length != 2) && (Settings.addon.length != 5) ){
+      alert("Addon should be 2 or 5 digits long.\nLength is: " + Settings.addon.length );
       return showDialog(Settings); // Restart
     }
 
@@ -1012,7 +1014,8 @@ var BarcodeDrawer = (function () {
       digit = addonWidths[i][2]; //may be undefined
 
       if (digit) {
-        drawChar(hpos, digit, font, fontSize, true);
+        var textBox = drawChar(hpos, digit, font, fontSize-2, true, -addonHeight-14);
+        textBox.textFramePreferences.verticalJustification = VerticalJustification.BOTTOM_ALIGN;
       }
 
       for (var j = 0; j < widths.length; j++) {
@@ -1079,8 +1082,9 @@ var BarcodeDrawer = (function () {
     }
   }
 
-  function drawChar(x, character, font, fontSize, fitBox) {
-    var y = vOffset + normalHeight + 2;
+  function drawChar(x, character, font, fontSize, fitBox, yOffset) {
+    var yOffset = yOffset || 0;
+    var y = yOffset + vOffset + normalHeight + 2;
     var boxWidth = 7;
     var boxHeight = 9;
     var textBox = drawText(x, y, boxWidth, boxHeight, character, font, fontSize, Justification.LEFT_ALIGN, VerticalJustification.TOP_ALIGN);
@@ -1097,11 +1101,7 @@ var BarcodeDrawer = (function () {
     return textBox;
   }
 
-  function drawWhiteBox(wide) {
-    var width = 112;
-    if (wide) {
-      width = 170;
-    }
+  function drawWhiteBox() {
     var whiteBox = drawBox(hpos - 10, vOffset - 10, width, normalHeight + 22, bgSwatchName);
     whiteBox.label = "barcode_whiteBox";
   }
@@ -1110,6 +1110,13 @@ var BarcodeDrawer = (function () {
     scale = 0.3;
     heightAdjustPercent = Settings.heightPercent;
     normalHeight = 70;
+    normalWidth = 112;
+    width = 112;
+    if(String(Settings.addon).length == 5) {
+        width = 175;
+    } else if (String(Settings.addon).length == 2) {
+        width = 150;
+    }
     guardHeight = 75;
     addonHeight = 60;
     normalHeight = (normalHeight / 100) * heightAdjustPercent;
@@ -1167,14 +1174,14 @@ var BarcodeDrawer = (function () {
       bgSwatchName = 'Paper';
     }
 
-    drawWhiteBox(!!addonWidths);
+    drawWhiteBox();
     
     var textBox = drawText(hpos - 7, vOffset - 8, 102, 6.5, 
       Settings.humanReadableStr, Settings.isbnFont, 13, Justification.FULLY_JUSTIFIED, VerticalJustification.BOTTOM_ALIGN);
 
     try {
       textBox.parentStory.otfFigureStyle = OTFFigureStyle.PROPORTIONAL_LINING;
-      textBox.parentStory.kerningMethod = "Optical"; // Most fonts have bad kerning for all caps characters
+      textBox.parentStory.kerningMethod = "$ID/Optical"; // Most fonts have bad kerning for all caps characters
       textBox.parentStory.tracking = Settings.isbnFontTracking;
     } catch (e) {
       alert("Warning setting story preferences: " + e);
