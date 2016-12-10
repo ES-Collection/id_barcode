@@ -2473,7 +2473,7 @@ var BarcodeDrawer = (function () {
   }
 
   function drawAddonBar(width) {
-    drawBar(width, addonHeight, vOffset + (normalHeight - addonHeight));
+    drawBar(width, addonHeight, vOffset + (guardHeight - addonHeight));
   }
 
   function drawGuard() {
@@ -2548,7 +2548,8 @@ var BarcodeDrawer = (function () {
       digit = addonWidths[i][2]; //may be undefined
 
       if (digit) {
-        drawChar(hpos, digit, font, fontSize, true);
+        var textBox = drawChar(hpos, digit, font, fontSize-1, true, -addonHeight-10);
+        textBox.textFramePreferences.verticalJustification = VerticalJustification.BOTTOM_ALIGN;
       }
 
       for (var j = 0; j < widths.length; j++) {
@@ -2615,8 +2616,9 @@ var BarcodeDrawer = (function () {
     }
   }
 
-  function drawChar(x, character, font, fontSize, fitBox) {
-    var y = vOffset + normalHeight + 2;
+  function drawChar(x, character, font, fontSize, fitBox, yOffset) {
+    var yOffset = yOffset || 0;
+    var y = yOffset + vOffset + normalHeight + 2;
     var boxWidth = 7;
     var boxHeight = 9;
     var textBox = drawText(x, y, boxWidth, boxHeight, character, font, fontSize, Justification.LEFT_ALIGN, VerticalJustification.TOP_ALIGN);
@@ -2633,11 +2635,7 @@ var BarcodeDrawer = (function () {
     return textBox;
   }
 
-  function drawWhiteBox(wide) {
-    var width = 112;
-    if (wide) {
-      width = 170;
-    }
+  function drawWhiteBox() {
     var whiteBox = drawBox(hpos - 10, vOffset - 10, width, normalHeight + 22, bgSwatchName);
     whiteBox.label = "barcode_whiteBox";
   }
@@ -2646,6 +2644,13 @@ var BarcodeDrawer = (function () {
     scale = 0.3;
     heightAdjustPercent = Settings.heightPercent;
     normalHeight = 70;
+    normalWidth = 112;
+    width = 112;
+    if(String(Settings.addon).length == 5) {
+        width = 175;
+    } else if (String(Settings.addon).length == 2) {
+        width = 148;
+    }
     guardHeight = 75;
     addonHeight = 60;
     normalHeight = (normalHeight / 100) * heightAdjustPercent;
@@ -2657,11 +2662,7 @@ var BarcodeDrawer = (function () {
     vOffset = 10;
   }
 
-  function getSize(addonWidths){
-    var width = 112;
-    if(addonWidths) {
-      width = 170;
-    }
+  function getSize(){
     var height = normalHeight + 22;
     return {  width : width * scale, height : height * scale };
   }
@@ -2673,7 +2674,7 @@ var BarcodeDrawer = (function () {
 
     init(Settings);
     
-    var size = getSize(addonWidths);
+    var size = getSize();
     
     doc = getCurrentOrNewDocument(Settings, size);
     // Save data in doc so we can load this back into UI
@@ -2703,7 +2704,7 @@ var BarcodeDrawer = (function () {
       bgSwatchName = 'Paper';
     }
 
-    drawWhiteBox(!!addonWidths);
+    drawWhiteBox();
     
     var textBox = drawText(hpos - 7, vOffset - 8, 102, 6.5, 
       Settings.humanReadableStr, Settings.isbnFont, 13, Justification.FULLY_JUSTIFIED, VerticalJustification.BOTTOM_ALIGN);

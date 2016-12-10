@@ -939,7 +939,7 @@ var BarcodeDrawer = (function () {
   }
 
   function drawAddonBar(width) {
-    drawBar(width, addonHeight, vOffset + (normalHeight - addonHeight));
+    drawBar(width, addonHeight, vOffset + (guardHeight - addonHeight));
   }
 
   function drawGuard() {
@@ -1014,7 +1014,7 @@ var BarcodeDrawer = (function () {
       digit = addonWidths[i][2]; //may be undefined
 
       if (digit) {
-        var textBox = drawChar(hpos, digit, font, fontSize-2, true, -addonHeight-14);
+        var textBox = drawChar(hpos, digit, font, fontSize-1, true, -addonHeight-10);
         textBox.textFramePreferences.verticalJustification = VerticalJustification.BOTTOM_ALIGN;
       }
 
@@ -1115,7 +1115,7 @@ var BarcodeDrawer = (function () {
     if(String(Settings.addon).length == 5) {
         width = 175;
     } else if (String(Settings.addon).length == 2) {
-        width = 150;
+        width = 148;
     }
     guardHeight = 75;
     addonHeight = 60;
@@ -1128,11 +1128,7 @@ var BarcodeDrawer = (function () {
     vOffset = 10;
   }
 
-  function getSize(addonWidths){
-    var width = 112;
-    if(addonWidths) {
-      width = 170;
-    }
+  function getSize(){
     var height = normalHeight + 22;
     return {  width : width * scale, height : height * scale };
   }
@@ -1144,7 +1140,7 @@ var BarcodeDrawer = (function () {
 
     init(Settings);
     
-    var size = getSize(addonWidths);
+    var size = getSize();
     
     doc = getCurrentOrNewDocument(Settings, size);
     // Save data in doc so we can load this back into UI
