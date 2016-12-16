@@ -20,7 +20,7 @@ function getStandardSettings(){
                     humanReadable     : true,
                     alignTo           : "Selection",
                     selectionBounds   : [0,0,0,0],
-                    refPoint          : "TOP_LEFT_ANCHOR",
+                    refPoint          : "CENTER_ANCHOR",
                     offset            : { x : 0, y : 0 },
                     humanReadableStr  : "",
                     heightPercent     : 60 }
@@ -465,6 +465,14 @@ function showDialog(Settings) {
         case "Group":
         case "PageItem":
           alignToOptions.push("Selection");
+          var selectionParentPage = app.selection[0].parentPage.name;
+          // Let’s see which page contains selection
+          for (var j=0; j<=list_of_pages.length-1; j++){
+            if(list_of_pages[j] == selectionParentPage){
+              Settings.pageIndex = j;
+              break;
+            }
+          }
           break;
         default:
           break;
@@ -639,7 +647,6 @@ function showDialog(Settings) {
   for(var i = 0; i < 3; i++){
   botRow.add("radiobutton", undefined,"");
   }
-  topRow.children[0].value = true;
 
   // Add event listeners
   for(var i = 0; i < 3; i++){
@@ -846,7 +853,9 @@ function showDialog(Settings) {
     }
 
     if( Settings.alignTo == "Selection" ) {
-      Settings.selectionBounds = app.selection[0].visibleBounds; // TO DO, this should be bounds of all selected elements
+      var originalRulers = setRuler(Settings.doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
+      Settings.selectionBounds = app.selection[0].visibleBounds;
+      setRuler(Settings.doc, originalRulers);
     } else {
       Settings.selectionBounds = [0,0,0,0];
     }
@@ -895,9 +904,10 @@ var BarcodeDrawer = (function () {
   }
 
   function getCurrentOrNewDocument(Settings, size) {
-    var doc = app.documents[0];
-    if (!doc.isValid) {
-      
+    var doc = undefined;
+    try {
+      var doc = app.activeDocument;
+    } catch (noDocOpen) {
       var originalMarginPreference = {
         top    : app.marginPreferences.top,
         left   : app.marginPreferences.left,
@@ -1208,7 +1218,7 @@ var BarcodeDrawer = (function () {
     BarcodeGroup.label = "Barcode_Complete";
 
     // Let's position the barcode now
-    BarcodeGroup.move(page);
+    BarcodeGroup.move(page.parent.pages[0]);
     BarcodeGroup.visibleBounds = calcOffset(BarcodeGroup.visibleBounds, page, Settings);
     
     //reset rulers
