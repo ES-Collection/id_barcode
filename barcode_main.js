@@ -17,6 +17,7 @@ function getStandardSettings(){
                     codeFont          : "OCR B Std\tRegular",
                     isbnFontTracking  : 0,
                     whiteBox          : true,
+                    humanReadable     : true,
                     alignTo           : "Selection",
                     selectionBounds   : [0,0,0,0],
                     refPoint          : "TOP_LEFT_ANCHOR",
@@ -597,13 +598,16 @@ function showDialog(Settings) {
   fontPanel.alignment = "fill";
   fontPanel.alignChildren = "left";
   fontPanel.orientation = 'column';
-  fontPanel.add('statictext', undefined, 'Human-readable');
-  var isbnFontRow = fontPanel.add('group');
-  var isbnFontSelect = FontSelect(isbnFontRow, Settings.isbnFont);
+
   fontPanel.add('statictext', undefined, 'Machine-readable');
   var codeFontRow = fontPanel.add('group');
   var codeFontSelect = FontSelect(codeFontRow, Settings.codeFont);
   
+  var HR = fontPanel.add ("checkbox", undefined, "Add human-readable");
+      HR.value = Settings.humanReadable;
+  var isbnFontRow = fontPanel.add('group');
+  var isbnFontSelect = FontSelect(isbnFontRow, Settings.isbnFont);
+
   // Add options
   var extraoptionsPanel = dialog.add('group');
       extraoptionsPanel.alignChildren = "top";
@@ -794,6 +798,7 @@ function showDialog(Settings) {
     Settings.addon         = addonText.text.replace(/[^\d]+/g, '');
     Settings.heightPercent = heightPercentInput.text.replace(/[^\d]+/g, '');
     Settings.whiteBox      = whiteBG.value;
+    Settings.humanReadable = HR.value;
     Settings.alignTo       = alignToDropdown.selection.text;
     Settings.refPoint      = getSelectedReferencePoint();
     Settings.offset        = { x : parseFloat(offsetX.text), y : parseFloat(offsetY.text) };
@@ -860,7 +865,7 @@ var BarcodeDrawer = (function () {
   var page;
   var layer;
   var scale;
-  var normalHeight;
+  var height;
   var guardHeight;
   var addonHeight;
   var reduce;
@@ -877,15 +882,15 @@ var BarcodeDrawer = (function () {
     pathPoints[1].anchor = [x2, y2];
   }
 
-  function drawBox(x, y, width, height, colour) {
+  function drawBox(x, y, boxWidth, boxHeight, colour) {
     x *= scale;
     y *= scale;
-    width *= scale;
-    height *= scale;
+    boxWidth *= scale;
+    boxHeight *= scale;
     var rect = page.rectangles.add();
     rect.strokeWeight = 0;
     rect.fillColor = colour || "Black";
-    rect.geometricBounds = [y, x, y + height, x + width];
+    rect.geometricBounds = [y, x, y + boxHeight, x + boxWidth];
     return rect;
   }
 
@@ -928,18 +933,18 @@ var BarcodeDrawer = (function () {
     return doc;
   }
 
-  function drawBar(width, height, y) {
-    if (! height) {
-      height = normalHeight;
+  function drawBar(barWidth, barHeight, y) {
+    if (! barHeight) {
+      barHeight = height;
     }
     if (! y) {
       y = vOffset;
     }
-    drawBox(hpos, y, width - reduce, height);
+    drawBox(hpos, y, barWidth - reduce, barHeight);
   }
 
-  function drawAddonBar(width) {
-    drawBar(width, addonHeight, vOffset + (guardHeight - addonHeight));
+  function drawAddonBar(addonWidth) {
+    drawBar(addonWidth, addonHeight, vOffset + (guardHeight - addonHeight));
   }
 
   function drawGuard() {
@@ -971,7 +976,7 @@ var BarcodeDrawer = (function () {
   function drawMain(barWidths, font) {
     var pattern = null;
     var widths = null;
-    var width = null;
+    var barWidth = null;
     var digit = null;
 
     // calculate the initial fontsize 
@@ -981,18 +986,18 @@ var BarcodeDrawer = (function () {
     var fontSize = fitTextBox(textBox, true, true); // Fit type size
 
     for (var i = 0; i < barWidths.length; i++) {
-      pattern = barWidths[i][0];
-      widths = barWidths[i][1];
-      digit = barWidths[i][2];
+      pattern  = barWidths[i][0];
+      widths   = barWidths[i][1];
+      digit    = barWidths[i][2];
 
       drawChar(hpos, digit, font, fontSize, true);
 
       for (var j = 0; j < 4; j++) {
-        width = widths[j];
+        barWidth = widths[j];
         if (pattern[j] === 1) {
-          drawBar(width);
+          drawBar(barWidth);
         }
-        hpos += width;
+        hpos += barWidth;
       }
       if (i == 5) {
         midGuards();
@@ -1004,7 +1009,7 @@ var BarcodeDrawer = (function () {
   function drawAddon(addonWidths, font, fontSize) {
     var pattern = null;
     var widths = null;
-    var width = null;
+    var aWidth = null;
     var digit = null;
 
     hpos += 10; //gap between barcode and addon
@@ -1019,11 +1024,11 @@ var BarcodeDrawer = (function () {
       }
 
       for (var j = 0; j < widths.length; j++) {
-        width = widths[j];
+        aWidth = widths[j];
         if (pattern[j] === 1) {
-          drawAddonBar(width);
+          drawAddonBar(aWidth);
         }
-        hpos += width;
+        hpos += aWidth;
       }
     }
   }
@@ -1084,7 +1089,7 @@ var BarcodeDrawer = (function () {
 
   function drawChar(x, character, font, fontSize, fitBox, yOffset) {
     var yOffset = yOffset || 0;
-    var y = yOffset + vOffset + normalHeight + 2;
+    var y = yOffset + vOffset + height + 2;
     var boxWidth = 7;
     var boxHeight = 9;
     var textBox = drawText(x, y, boxWidth, boxHeight, character, font, fontSize, Justification.LEFT_ALIGN, VerticalJustification.TOP_ALIGN);
@@ -1102,16 +1107,21 @@ var BarcodeDrawer = (function () {
   }
 
   function drawWhiteBox() {
-    var whiteBox = drawBox(hpos - 10, vOffset - 10, width, normalHeight + 22, bgSwatchName);
+    var whiteBox = drawBox(hpos - 10, 0, width, height+12+vOffset, bgSwatchName);
     whiteBox.label = "barcode_whiteBox";
   }
 
   function init(Settings) {
     scale = 0.3;
     heightAdjustPercent = Settings.heightPercent;
-    normalHeight = 70;
-    normalWidth = 112;
+    vOffset = 5;
+    if(Settings.humanReadable) {
+      vOffset = 10;
+    }
+    
+    height = 60 + vOffset;
     width = 112;
+
     if(String(Settings.addon).length == 5) {
         width = 175;
     } else if (String(Settings.addon).length == 2) {
@@ -1119,18 +1129,18 @@ var BarcodeDrawer = (function () {
     }
     guardHeight = 75;
     addonHeight = 60;
-    normalHeight = (normalHeight / 100) * heightAdjustPercent;
+    height = (height / 100) * heightAdjustPercent;
     guardHeight  = (guardHeight / 100) * heightAdjustPercent;
     addonHeight  = (addonHeight / 100) * heightAdjustPercent;
     reduce = 0.3;
     devider = 1/reduce;
     hpos = 10;
-    vOffset = 10;
+
   }
 
   function getSize(){
-    var height = normalHeight + 22;
-    return {  width : width * scale, height : height * scale };
+    var _height = height+12+vOffset;
+    return {  width : width * scale, height : _height * scale };
   }
 
   function drawBarcode(Settings) {
@@ -1172,18 +1182,20 @@ var BarcodeDrawer = (function () {
 
     drawWhiteBox();
     
-    var textBox = drawText(hpos - 7, vOffset - 8, 102, 6.5, 
-      Settings.humanReadableStr, Settings.isbnFont, 13, Justification.FULLY_JUSTIFIED, VerticalJustification.BOTTOM_ALIGN);
+    if(Settings.humanReadable) {
+      var textBox = drawText(hpos - 7, vOffset - 8, 102, 6.5, 
+        Settings.humanReadableStr, Settings.isbnFont, 13, Justification.FULLY_JUSTIFIED, VerticalJustification.BOTTOM_ALIGN);
 
-    try {
-      textBox.parentStory.otfFigureStyle = OTFFigureStyle.PROPORTIONAL_LINING;
-      textBox.parentStory.kerningMethod = "$ID/Optical"; // Most fonts have bad kerning for all caps characters
-      textBox.parentStory.tracking = Settings.isbnFontTracking;
-    } catch (e) {
-      alert("Warning setting story preferences: " + e);
+      try {
+        textBox.parentStory.otfFigureStyle = OTFFigureStyle.PROPORTIONAL_LINING;
+        textBox.parentStory.kerningMethod = "$ID/Optical"; // Most fonts have bad kerning for all caps characters
+        textBox.parentStory.tracking = Settings.isbnFontTracking;
+      } catch (e) {
+        alert("Warning setting story preferences: " + e);
+      }
+
+      fitTextBox(textBox, true, false);
     }
-
-    fitTextBox(textBox, true, false);
 
     startGuards();
     Settings.codeFontSize = drawMain(barWidths, Settings.codeFont);
