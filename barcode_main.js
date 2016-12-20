@@ -18,7 +18,7 @@ function getStandardSettings(){
                     isbnFontTracking  : 0,
                     whiteBox          : true,
                     humanReadable     : true,
-                    alignTo           : "Selection",
+                    alignTo           : "Page",
                     selectionBounds   : [0,0,0,0],
                     refPoint          : "CENTER_ANCHOR",
                     offset            : { x : 0, y : 0 },
@@ -231,12 +231,44 @@ function find(haystack, needle) {
     return 0; // Return the first element if nothing is found
 }
 
+function getItemByLabel(myPageOrSpread, myLabel){
+    // This funcion returns an array of all items found with given label
+    // If nothing is found this function returns an empty array
+    var allItems = new Array();
+    if(myPageOrSpread.isValid){
+        var myElements = myPageOrSpread.allPageItems;
+        var len = myElements.length;
+        for (var i = len-1; i >= 0; i--){
+            if(myElements[i].label == myLabel){
+                allItems.push(myElements[i]);
+            }
+        }
+        // Guides are not part of pageItems but they can have labels too!
+        var myGuides   = myPageOrSpread.guides;
+        var len = myGuides.length;
+        for (var i = len-1; i >= 0; i--){
+            if(myGuides[i].label == myLabel){
+                allItems.push(myGuides[i]);
+            }
+        }
+    } else {
+        alert("ERROR 759403253473: Expected a valid page or spread.");
+    }     
+    return allItems;
+}
+
 function calcOffset(itemBounds, page, Settings){
 
   var ib = getBoundsInfo(itemBounds);
   var pb = getBoundsInfo(page.bounds);
 
-  if(Settings.alignTo == "Selection"){
+  if(Settings.alignTo == "barcode_box"){
+    Settings.selectionBounds = Settings.barcode_box.visibleBounds;
+    // Now lets add it to the offsets
+    Settings.offset.x += Settings.selectionBounds[1];
+    Settings.offset.y += Settings.selectionBounds[0];
+    pb = getBoundsInfo(Settings.selectionBounds);
+  } else if(Settings.alignTo == "Selection"){
     for(var i=1;i<app.selection.length;i++){
       switch (app.selection[i].constructor.name){
         case "Rectangle":
@@ -246,7 +278,7 @@ function calcOffset(itemBounds, page, Settings){
         case "GraphicLine":
         case "Group":
         case "PageItem":
-          itemBounds = app.selection[i].visibleBounds; //array [y1, x1, y2, x2], [top, left, bottom, right]
+          var itemBounds = app.selection[i].visibleBounds; //array [y1, x1, y2, x2], [top, left, bottom, right]
           if(itemBounds[0] < Settings.selectionBounds[0]){ Settings.selectionBounds[0] = itemBounds[0]; }
           if(itemBounds[1] < Settings.selectionBounds[1]){ Settings.selectionBounds[1] = itemBounds[1]; }
           if(itemBounds[2] > Settings.selectionBounds[2]){ Settings.selectionBounds[2] = itemBounds[2]; }
@@ -426,6 +458,7 @@ function calcOffset(itemBounds, page, Settings){
 function showDialog(Settings) {
 
   var selectionBounds, pageBounds, marginBounds = [0,0,0,0];
+  Settings.barcode_box = false;
 
   if ( (Settings === null) || (typeof Settings !== 'object') ) {
     var Settings = getStandardSettings();
@@ -442,6 +475,7 @@ function showDialog(Settings) {
   if(Settings.doc == undefined) {
     Settings.pageIndex = 0;
   } else {
+
     var list_of_pages = Settings.doc.pages.everyItem().name;
 
     if( (Settings.pageIndex < 0) || (Settings.pageIndex > list_of_pages.length-1) ) {
@@ -465,6 +499,7 @@ function showDialog(Settings) {
         case "Group":
         case "PageItem":
           alignToOptions.push("Selection");
+          Settings.alignTo = "Selection";
           var selectionParentPage = app.selection[0].parentPage.name;
           // Let’s see which page contains selection
           for (var j=0; j<=list_of_pages.length-1; j++){
@@ -478,6 +513,23 @@ function showDialog(Settings) {
           break;
       }
     }
+
+    // see if there is a barcode box on active spread
+    var barcode_boxes = getItemByLabel(app.activeWindow.activeSpread, "barcode_box");
+    if( barcode_boxes.length > 0 ) {
+      Settings.barcode_box = barcode_boxes[0];
+      alignToOptions.push("barcode_box");
+      Settings.alignTo = "barcode_box";
+      var selectionParentPage = Settings.barcode_box.parentPage.name;
+      // Let’s see which page contains selection
+      for (var j=0; j<=list_of_pages.length-1; j++){
+        if(list_of_pages[j] == selectionParentPage){
+          Settings.pageIndex = j;
+          break;
+        }
+      }
+    }
+
   }
   
   //just for testing
@@ -851,8 +903,13 @@ function showDialog(Settings) {
         alert("Please select your fonts first");
         return showDialog(Settings); // Restart
     }
+    
 
-    if( Settings.alignTo == "Selection" ) {
+    if( Settings.alignTo == "barcode_box" ) {
+      var originalRulers = setRuler(Settings.doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
+      Settings.selectionBounds = Settings.barcode_box.visibleBounds;
+      setRuler(Settings.doc, originalRulers);
+    } else if( Settings.alignTo == "Selection" ) {
       var originalRulers = setRuler(Settings.doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
       Settings.selectionBounds = app.selection[0].visibleBounds;
       setRuler(Settings.doc, originalRulers);
