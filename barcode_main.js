@@ -23,6 +23,7 @@ function getStandardSettings(){
                     refPoint          : "CENTER_ANCHOR",
                     offset            : { x : 0, y : 0 },
                     humanReadableStr  : "",
+                    createOulines     : true,
                     heightPercent     : 60 }
   
   if (app.documents.length == 0) return Settings;
@@ -1040,7 +1041,17 @@ var BarcodeDrawer = (function () {
     hpos += 2;
   }
 
-  function drawMain(barWidths, font) {
+  function outline(Settings, textBox){
+    if(Settings.createOulines) {
+      try{
+        textBox.createOutlines();
+      } catch (err) {
+        alert("Could not create outlines\n" + err.description);
+        Settings.createOulines = false; // Don't show this message again :)
+      }
+    }
+  }
+  function drawMain(Settings, barWidths) {
     var pattern = null;
     var widths = null;
     var barWidth = null;
@@ -1049,15 +1060,17 @@ var BarcodeDrawer = (function () {
     // calculate the initial fontsize 
     // and use this size to draw the other characters
     // this makes sure all numbers are the same size
-    var textBox = drawChar(hpos - 10, '9', font, 13, false); //initial '9'
+    var textBox = drawChar(Settings, hpos - 10, '9', Settings.codeFont, 13, false); //initial '9'
     var fontSize = fitTextBox(textBox, true, true); // Fit type size
+
+    outline(Settings, textBox);
 
     for (var i = 0; i < barWidths.length; i++) {
       pattern  = barWidths[i][0];
       widths   = barWidths[i][1];
       digit    = barWidths[i][2];
 
-      drawChar(hpos, digit, font, fontSize, true);
+      outline( Settings, drawChar(Settings, hpos, digit, Settings.codeFont, fontSize, true) );
 
       for (var j = 0; j < 4; j++) {
         barWidth = widths[j];
@@ -1073,7 +1086,7 @@ var BarcodeDrawer = (function () {
     return fontSize;
   }
 
-  function drawAddon(addonWidths, font, fontSize) {
+  function drawAddon(Settings, addonWidths) {
     var pattern = null;
     var widths = null;
     var aWidth = null;
@@ -1086,8 +1099,9 @@ var BarcodeDrawer = (function () {
       digit = addonWidths[i][2]; //may be undefined
 
       if (digit) {
-        var textBox = drawChar(hpos, digit, font, fontSize-1, true, -addonHeight-10);
+        var textBox = drawChar(Settings, hpos, digit, Settings.codeFont, Settings.codeFontSize-1, true, -addonHeight-10);
         textBox.textFramePreferences.verticalJustification = VerticalJustification.BOTTOM_ALIGN;
+        outline(Settings, textBox);
       }
 
       for (var j = 0; j < widths.length; j++) {
@@ -1154,7 +1168,7 @@ var BarcodeDrawer = (function () {
     }
   }
 
-  function drawChar(x, character, font, fontSize, fitBox, yOffset) {
+  function drawChar(Settings, x, character, font, fontSize, fitBox, yOffset) {
     var yOffset = yOffset || 0;
     var y = yOffset + vOffset + height + 2;
     var boxWidth = 7;
@@ -1167,9 +1181,12 @@ var BarcodeDrawer = (function () {
     } catch (e) {
       // Not OTF
     }
+    
     if(fitBox) {
-      fitTextBox(textBox, false, true);
+      var fitText = false;
+      fitTextBox(textBox, fitText, fitBox);  
     }
+
     return textBox;
   }
 
@@ -1262,13 +1279,14 @@ var BarcodeDrawer = (function () {
       }
 
       fitTextBox(textBox, true, false);
+      outline(Settings, textBox);
     }
 
     startGuards();
-    Settings.codeFontSize = drawMain(barWidths, Settings.codeFont);
+    Settings.codeFontSize = drawMain(Settings, barWidths);
     endGuards();
     if (addonWidths) {
-      drawAddon(addonWidths, Settings.codeFont, Settings.codeFontSize);
+      drawAddon(Settings, addonWidths);
     }
     var BarcodeGroup = page.groups.add(layer.allPageItems);
 

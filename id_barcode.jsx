@@ -1552,11 +1552,12 @@ function getStandardSettings(){
                     isbnFontTracking  : 0,
                     whiteBox          : true,
                     humanReadable     : true,
-                    alignTo           : "Selection",
+                    alignTo           : "Page",
                     selectionBounds   : [0,0,0,0],
                     refPoint          : "CENTER_ANCHOR",
                     offset            : { x : 0, y : 0 },
                     humanReadableStr  : "",
+                    createOulines     : true,
                     heightPercent     : 60 }
   
   if (app.documents.length == 0) return Settings;
@@ -1765,12 +1766,44 @@ function find(haystack, needle) {
     return 0; // Return the first element if nothing is found
 }
 
+function getItemByLabel(myPageOrSpread, myLabel){
+    // This funcion returns an array of all items found with given label
+    // If nothing is found this function returns an empty array
+    var allItems = new Array();
+    if(myPageOrSpread.isValid){
+        var myElements = myPageOrSpread.allPageItems;
+        var len = myElements.length;
+        for (var i = len-1; i >= 0; i--){
+            if(myElements[i].label == myLabel){
+                allItems.push(myElements[i]);
+            }
+        }
+        // Guides are not part of pageItems but they can have labels too!
+        var myGuides   = myPageOrSpread.guides;
+        var len = myGuides.length;
+        for (var i = len-1; i >= 0; i--){
+            if(myGuides[i].label == myLabel){
+                allItems.push(myGuides[i]);
+            }
+        }
+    } else {
+        alert("ERROR 759403253473: Expected a valid page or spread.");
+    }     
+    return allItems;
+}
+
 function calcOffset(itemBounds, page, Settings){
 
   var ib = getBoundsInfo(itemBounds);
   var pb = getBoundsInfo(page.bounds);
 
-  if(Settings.alignTo == "Selection"){
+  if(Settings.alignTo == "barcode_box"){
+    Settings.selectionBounds = Settings.barcode_box.visibleBounds;
+    // Now lets add it to the offsets
+    Settings.offset.x += Settings.selectionBounds[1];
+    Settings.offset.y += Settings.selectionBounds[0];
+    pb = getBoundsInfo(Settings.selectionBounds);
+  } else if(Settings.alignTo == "Selection"){
     for(var i=1;i<app.selection.length;i++){
       switch (app.selection[i].constructor.name){
         case "Rectangle":
@@ -1780,7 +1813,7 @@ function calcOffset(itemBounds, page, Settings){
         case "GraphicLine":
         case "Group":
         case "PageItem":
-          itemBounds = app.selection[i].visibleBounds; //array [y1, x1, y2, x2], [top, left, bottom, right]
+          var itemBounds = app.selection[i].visibleBounds; //array [y1, x1, y2, x2], [top, left, bottom, right]
           if(itemBounds[0] < Settings.selectionBounds[0]){ Settings.selectionBounds[0] = itemBounds[0]; }
           if(itemBounds[1] < Settings.selectionBounds[1]){ Settings.selectionBounds[1] = itemBounds[1]; }
           if(itemBounds[2] > Settings.selectionBounds[2]){ Settings.selectionBounds[2] = itemBounds[2]; }
@@ -1960,6 +1993,7 @@ function calcOffset(itemBounds, page, Settings){
 function showDialog(Settings) {
 
   var selectionBounds, pageBounds, marginBounds = [0,0,0,0];
+  Settings.barcode_box = false;
 
   if ( (Settings === null) || (typeof Settings !== 'object') ) {
     var Settings = getStandardSettings();
@@ -1976,6 +2010,7 @@ function showDialog(Settings) {
   if(Settings.doc == undefined) {
     Settings.pageIndex = 0;
   } else {
+
     var list_of_pages = Settings.doc.pages.everyItem().name;
 
     if( (Settings.pageIndex < 0) || (Settings.pageIndex > list_of_pages.length-1) ) {
@@ -1999,6 +2034,7 @@ function showDialog(Settings) {
         case "Group":
         case "PageItem":
           alignToOptions.push("Selection");
+          Settings.alignTo = "Selection";
           var selectionParentPage = app.selection[0].parentPage.name;
           // Let’s see which page contains selection
           for (var j=0; j<=list_of_pages.length-1; j++){
@@ -2012,6 +2048,23 @@ function showDialog(Settings) {
           break;
       }
     }
+
+    // see if there is a barcode box on active spread
+    var barcode_boxes = getItemByLabel(app.activeWindow.activeSpread, "barcode_box");
+    if( barcode_boxes.length > 0 ) {
+      Settings.barcode_box = barcode_boxes[0];
+      alignToOptions.push("barcode_box");
+      Settings.alignTo = "barcode_box";
+      var selectionParentPage = Settings.barcode_box.parentPage.name;
+      // Let’s see which page contains selection
+      for (var j=0; j<=list_of_pages.length-1; j++){
+        if(list_of_pages[j] == selectionParentPage){
+          Settings.pageIndex = j;
+          break;
+        }
+      }
+    }
+
   }
   
   //just for testing
@@ -2385,8 +2438,13 @@ function showDialog(Settings) {
         alert("Please select your fonts first");
         return showDialog(Settings); // Restart
     }
+    
 
-    if( Settings.alignTo == "Selection" ) {
+    if( Settings.alignTo == "barcode_box" ) {
+      var originalRulers = setRuler(Settings.doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
+      Settings.selectionBounds = Settings.barcode_box.visibleBounds;
+      setRuler(Settings.doc, originalRulers);
+    } else if( Settings.alignTo == "Selection" ) {
       var originalRulers = setRuler(Settings.doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
       Settings.selectionBounds = app.selection[0].visibleBounds;
       setRuler(Settings.doc, originalRulers);
@@ -2517,7 +2575,17 @@ var BarcodeDrawer = (function () {
     hpos += 2;
   }
 
-  function drawMain(barWidths, font) {
+  function outline(Settings, textBox){
+    if(Settings.createOulines) {
+      try{
+        textBox.createOutlines();
+      } catch (err) {
+        alert("Could not create outlines\n" + err.description);
+        Settings.createOulines = false; // Don't show this message again :)
+      }
+    }
+  }
+  function drawMain(Settings, barWidths) {
     var pattern = null;
     var widths = null;
     var barWidth = null;
@@ -2526,15 +2594,17 @@ var BarcodeDrawer = (function () {
     // calculate the initial fontsize 
     // and use this size to draw the other characters
     // this makes sure all numbers are the same size
-    var textBox = drawChar(hpos - 10, '9', font, 13, false); //initial '9'
+    var textBox = drawChar(Settings, hpos - 10, '9', Settings.codeFont, 13, false); //initial '9'
     var fontSize = fitTextBox(textBox, true, true); // Fit type size
+
+    outline(Settings, textBox);
 
     for (var i = 0; i < barWidths.length; i++) {
       pattern  = barWidths[i][0];
       widths   = barWidths[i][1];
       digit    = barWidths[i][2];
 
-      drawChar(hpos, digit, font, fontSize, true);
+      outline( Settings, drawChar(Settings, hpos, digit, Settings.codeFont, fontSize, true) );
 
       for (var j = 0; j < 4; j++) {
         barWidth = widths[j];
@@ -2550,7 +2620,7 @@ var BarcodeDrawer = (function () {
     return fontSize;
   }
 
-  function drawAddon(addonWidths, font, fontSize) {
+  function drawAddon(Settings, addonWidths) {
     var pattern = null;
     var widths = null;
     var aWidth = null;
@@ -2563,8 +2633,9 @@ var BarcodeDrawer = (function () {
       digit = addonWidths[i][2]; //may be undefined
 
       if (digit) {
-        var textBox = drawChar(hpos, digit, font, fontSize-1, true, -addonHeight-10);
+        var textBox = drawChar(Settings, hpos, digit, Settings.codeFont, Settings.codeFontSize-1, true, -addonHeight-10);
         textBox.textFramePreferences.verticalJustification = VerticalJustification.BOTTOM_ALIGN;
+        outline(Settings, textBox);
       }
 
       for (var j = 0; j < widths.length; j++) {
@@ -2631,7 +2702,7 @@ var BarcodeDrawer = (function () {
     }
   }
 
-  function drawChar(x, character, font, fontSize, fitBox, yOffset) {
+  function drawChar(Settings, x, character, font, fontSize, fitBox, yOffset) {
     var yOffset = yOffset || 0;
     var y = yOffset + vOffset + height + 2;
     var boxWidth = 7;
@@ -2644,9 +2715,12 @@ var BarcodeDrawer = (function () {
     } catch (e) {
       // Not OTF
     }
+    
     if(fitBox) {
-      fitTextBox(textBox, false, true);
+      var fitText = false;
+      fitTextBox(textBox, fitText, fitBox);  
     }
+
     return textBox;
   }
 
@@ -2739,13 +2813,14 @@ var BarcodeDrawer = (function () {
       }
 
       fitTextBox(textBox, true, false);
+      outline(Settings, textBox);
     }
 
     startGuards();
-    Settings.codeFontSize = drawMain(barWidths, Settings.codeFont);
+    Settings.codeFontSize = drawMain(Settings, barWidths);
     endGuards();
     if (addonWidths) {
-      drawAddon(addonWidths, Settings.codeFont, Settings.codeFontSize);
+      drawAddon(Settings, addonWidths);
     }
     var BarcodeGroup = page.groups.add(layer.allPageItems);
 
