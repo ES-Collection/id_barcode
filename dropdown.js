@@ -42,14 +42,18 @@ Array.prototype.findID = function (str) {
 function FontSelect(group, font) {
   var fontFamily = "";
   var fontStyle  = "";
-    
-  if (typeof font === 'string' || font instanceof String) {
-    var splitFont = font.split('\t');
-    if(splitFont.length == 2) {
-      fontFamily = splitFont[0];
-      fontStyle = splitFont[1];
+  
+  function setFontName(font) {
+    if (typeof font === 'string' || font instanceof String) {
+      var splitFont = font.split('\t');
+      if(splitFont.length == 2) {
+        fontFamily = splitFont[0];
+        fontStyle = splitFont[1];
+      }
     }
   }
+
+  setFontName(font);
 
   var sysFonts = app.fonts.everyItem();
   var sysFontsList = sysFonts.fontFamily.unique();
@@ -60,7 +64,9 @@ function FontSelect(group, font) {
   var availableFonts = group.add('dropdownlist', undefined, sysFontsList);
   var availableStyles = group.add('dropdownlist');
 
-  availableStyles.minimumSize = [180,25];
+  availableFonts.minimumSize = [230,25];
+  availableStyles.minimumSize = [220,25];
+  
   availableFonts.onChange = function () {
     availableStyles.removeAll();
     var sysFontAvailableStyles = sysFonts.name.findIn(availableFonts.selection);
@@ -79,8 +85,23 @@ function FontSelect(group, font) {
         return availableFonts.selection.text + '\t' + availableStyles.selection.text;
       }
       else {
-        return null; //Now we know the default font is not loaded
+        return null; //Now we know the font is not loaded
       }
+    },
+    setFont: function(fontName){
+      setFontName(fontName);
+      fontFamilyId = sysFontsList.findID(fontFamily);
+      availableFonts.selection = fontFamilyId;
+      
+      availableStyles.removeAll();
+      
+      var sysFontAvailableStyles = sysFonts.name.findIn(availableFonts.selection);
+      for (var i = 0; i < sysFontAvailableStyles.length; i++) {
+        availableStyles.add('item',sysFontAvailableStyles[i]);
+      }
+      
+      fontStyleId = sysFontAvailableStyles.findID(fontStyle);
+      availableStyles.selection = fontStyleId;
     }
   };
 }

@@ -137,18 +137,18 @@ var Barcode = function () {
   function stripAddon(str) {
     return str.replace(/[^\d]+/g, '');
   }
-  function stripISBN(str) {
+  function stripEAN(str) {
     return str.replace(/[^0-9X]/gi, '');
   }
 
   return {
-    init: function (Settings) {
-      var isbnStr  = String(Settings.isbn);
-      var addonStr = String(Settings.addon);
+    init: function (preset) {
+      var eanStr   = String(preset.ean);
+      var addonStr = String(preset.addon);
       
-      if (isbnStr) {
-        barcode_string = isbnStr;
-        stripped = stripISBN(barcode_string);
+      if (eanStr) {
+        barcode_string = eanStr;
+        stripped = stripEAN(barcode_string);
         if ( !checkCheckDigit(stripped) ) {
           throw "Check digit incorrect";
         }
@@ -192,7 +192,7 @@ var Barcode = function () {
         }
         var norm = getNorm(barWidths[i]);
         current.push(norm);
-        current.push(stripped[i+1]); //add isbn digit
+        current.push(stripped[i+1]); //add ean digit
         normalisedWidths.push(current);
       }
       return normalisedWidths;
@@ -366,14 +366,18 @@ Array.prototype.findID = function (str) {
 function FontSelect(group, font) {
   var fontFamily = "";
   var fontStyle  = "";
-    
-  if (typeof font === 'string' || font instanceof String) {
-    var splitFont = font.split('\t');
-    if(splitFont.length == 2) {
-      fontFamily = splitFont[0];
-      fontStyle = splitFont[1];
+  
+  function setFontName(font) {
+    if (typeof font === 'string' || font instanceof String) {
+      var splitFont = font.split('\t');
+      if(splitFont.length == 2) {
+        fontFamily = splitFont[0];
+        fontStyle = splitFont[1];
+      }
     }
   }
+
+  setFontName(font);
 
   var sysFonts = app.fonts.everyItem();
   var sysFontsList = sysFonts.fontFamily.unique();
@@ -384,7 +388,9 @@ function FontSelect(group, font) {
   var availableFonts = group.add('dropdownlist', undefined, sysFontsList);
   var availableStyles = group.add('dropdownlist');
 
-  availableStyles.minimumSize = [180,25];
+  availableFonts.minimumSize = [230,25];
+  availableStyles.minimumSize = [220,25];
+  
   availableFonts.onChange = function () {
     availableStyles.removeAll();
     var sysFontAvailableStyles = sysFonts.name.findIn(availableFonts.selection);
@@ -403,8 +409,23 @@ function FontSelect(group, font) {
         return availableFonts.selection.text + '\t' + availableStyles.selection.text;
       }
       else {
-        return null; //Now we know the default font is not loaded
+        return null; //Now we know the font is not loaded
       }
+    },
+    setFont: function(fontName){
+      setFontName(fontName);
+      fontFamilyId = sysFontsList.findID(fontFamily);
+      availableFonts.selection = fontFamilyId;
+      
+      availableStyles.removeAll();
+      
+      var sysFontAvailableStyles = sysFonts.name.findIn(availableFonts.selection);
+      for (var i = 0; i < sysFontAvailableStyles.length; i++) {
+        availableStyles.add('item',sysFontAvailableStyles[i]);
+      }
+      
+      fontStyleId = sysFontAvailableStyles.findID(fontStyle);
+      availableStyles.selection = fontStyleId;
     }
   };
 }
@@ -1535,57 +1556,704 @@ ISBN.isbn.prototype = {
 
 
 
+/*
+
+    JAXON is an array based preset manager for extendscript
+    It loads and saves presets to the user data-folder in JSON format
+    
+    It assumes your presets are objects collected in an array
+    
+    NOTE: At the moment this manager does not validate anything
+
+    Bruno Herfst 2016
+
+    Version 0.1
+    
+    Public Domain.
+
+    NO WARRANTY EXPRESSED OR IMPLIED. USE AT YOUR OWN RISK.
+
+*/
+
+var jaxon = function(filePath, standardPresets, templatePreset, presetLockChar){
+    // ref to self
+    var self = this;
+    // ref to JSON
+    self.JSON     = JSON;
+    // standard file path
+    self.filePath = filePath;
+    // standard file
+    self.file     = File(self.filePath);
+    // standard Presets (Array of preset objects)
+    self.std      = standardPresets;
+    // surrent preset (The presets we manipulate)
+    self.presets  = self.std;
+    // template preset (For validation and return)
+    self.template = templatePreset;
+    // preset locking character
+    // any preset starting with this character cannot be changed by the user
+    // users cannot start a preset with this character
+    self.lockChar = presetLockChar || '-';
+
+    self._fileExist = function(filePath) {
+        var f = File(filePath);
+        if(f.exists){
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    self._writeFile = function(filePath, contentString) {
+        var f = File(filePath);
+        try{
+            if( !f.open('w') ){
+                alert("Error opening file at " + filePath +" \n "+ f.error);
+            }
+            if( !f.write( String(contentString) ) ){
+                alert("Error writing to file at " + filePath +" \n "+ f.error);
+            }
+            if( !f.close() ){
+                alert("Error closing file at " + filePath +" \n "+ f.error);
+            }
+            return f;
+        } catch (t) {
+            alert("Error writing to file at " + filePath +" \n "+ t.error);
+        }
+        
+        f.close();
+        return false;
+    }
+
+    self._updatePreset = function(OldPreset, NewPreset, ignoreKeys){
+        // This function will try and copy the old presets
+        for (var key in NewPreset) {
+            if(OldPreset.hasOwnProperty(key)){
+                if (!key in ignoreKeys){
+                    NewPreset[key] = OldPreset[key];
+                }
+            }
+        }
+        return NewPreset;
+    }
+
+    self._savePresets = function(filePath, obj){
+        var objStr   = self.JSON.stringify(obj);
+        if( self._writeFile(filePath, objStr) ) {
+            return true;
+        } else {
+            alert("Could not write to file " + filePath);
+            return false;
+        }
+    }
+
+    self._loadPresets = function(filePath){
+
+        if(!self._fileExist(filePath)){
+            alert("Cannot load presets.\nFile does not exist.");
+            return false;
+        }
+
+        var fSettings = File(filePath);
+        fSettings.open('r');
+        var content = fSettings.read();
+        fSettings.close();
+
+        try {
+            var presets = self.JSON.parse(content);
+        } catch(e) {
+            alert("Error reading JSON\n" + e.description);
+            var presets = self.presets;
+        }
+
+        self.presets = presets;
+        return self.presets;
+    }
+
+    //-------------------------------------------------
+    // S T A R T   P U B L I C   A P I
+    //-------------------------------------------------
+    
+    self.getPresets = function(){
+        // return a copy not ref to self
+        return self.JSON.parse(self.JSON.stringify(self.presets));
+    }
+
+    self.getPreset = function(key, val) {
+        // Sample usage: Jaxon.getPreset('id',3);
+        for (var i = 0; i < self.presets.length; i++) {
+            for (var thisKey in self.presets[i]) {
+                if (thisKey == key) {
+                    if(self.presets[i][key] == val) {
+                        return self.presets[i];
+                    }
+                    continue;
+                }
+            }
+        }
+
+        return null;
+    }
+	
+	self.addPreset = function(obj) {
+        // Add optional before/after key?
+        self.presets.push(obj);
+        if( self._savePresets(self.filePath, self.presets) ) {
+            return true;
+        } else {
+            alert("Could not save presets to " + self.filePath);
+            return false;
+        }
+    }
+
+    self.addUniquePreset = function(obj, key, val) {
+        // Sample usage: Jaxon.addUniquePreset(obj, 'name', "My New Preset");
+        var exist = self.getPreset(key, val);
+        if(exist){
+            var a = confirm("Do you want to overwrite the existing preset?");
+            if (a == true) {
+                self.removePresets(key, val);
+            } else {
+                return false;
+            }
+        }
+        return self.addPreset(obj);
+    }
+    
+    self.updatePreset = function(obj, ignoreKeys) {
+    	var ignoreKeys = ignoreKeys || [];
+    	return self._updatePreset(obj, self.std, ignoreKeys);
+    }
+    
+    self.removePresets = function(key, val) {
+        // Sample usage: Jaxon.removePresets('id',3);
+        var removedPresets = false;
+        var len = self.presets.length-1;
+        for (var i = len; i >= 0; i--) {
+            for (var thisKey in self.presets[i]) {
+                if (thisKey == key) {
+                    if(self.presets[i][key] == val) {
+                        self.presets.splice( i, 1 );
+                        removedPresets = true;
+                    }
+                    continue;
+                }
+            }
+        }
+        if(removedPresets){
+            if( self._savePresets(self.filePath, self.presets) ) {
+                return true;
+            } else {
+                alert("Could not save presets to " + self.filePath);
+            }
+        }
+        return false;
+    }
+	
+    //-------------------------------------------------
+    // E N D   P U B L I C   A P I
+    //-------------------------------------------------
+    
+    // I N I T
+    //---------    
+    // Save the presets if not exist
+    if(!self._fileExist( self.filePath ) ){
+        if(! self._savePresets( self.filePath, self.presets ) ){
+            alert("Failed to start Jaxon\nUnable to save presets to " + self.filePath);
+            return null;
+        }
+    }
+    // Load the presets
+    self._loadPresets(self.filePath);
+};
+
+//----------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+//----------------------------------------------------------------------------------
+//
+// Start JSON
+//
+//----------------------------------------------------------------------------------
+//  json2.js
+//  2016-10-28
+//  Public Domain.
+//  NO WARRANTY EXPRESSED OR IMPLIED. USE AT YOUR OWN RISK.
+//  See http://github.com/douglascrockford/JSON-js/blob/master/json2.js
+
+// Create a JSON object only if one does not already exist. We create the
+// methods in a closure to avoid creating global variables.
+
+if (typeof JSON !== "object") {
+    JSON = {};
+}
+
+(function () {
+    "use strict";
+
+    var rx_one = /^[\],:{}\s]*$/;
+    var rx_two = /\\(?:["\\\/bfnrt]|u[0-9a-fA-F]{4})/g;
+    var rx_three = /"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g;
+    var rx_four = /(?:^|:|,)(?:\s*\[)+/g;
+    var rx_escapable = /[\\"\u0000-\u001f\u007f-\u009f\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g;
+    var rx_dangerous = /[\u0000\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g;
+
+    function f(n) {
+        // Format integers to have at least two digits.
+        return n < 10
+            ? "0" + n
+            : n;
+    }
+
+    function this_value() {
+        return this.valueOf();
+    }
+
+    if (typeof Date.prototype.toJSON !== "function") {
+
+        Date.prototype.toJSON = function () {
+
+            return isFinite(this.valueOf())
+                ? this.getUTCFullYear() + "-" +
+                        f(this.getUTCMonth() + 1) + "-" +
+                        f(this.getUTCDate()) + "T" +
+                        f(this.getUTCHours()) + ":" +
+                        f(this.getUTCMinutes()) + ":" +
+                        f(this.getUTCSeconds()) + "Z"
+                : null;
+        };
+
+        Boolean.prototype.toJSON = this_value;
+        Number.prototype.toJSON = this_value;
+        String.prototype.toJSON = this_value;
+    }
+
+    var gap;
+    var indent;
+    var meta;
+    var rep;
+
+
+    function quote(string) {
+
+// If the string contains no control characters, no quote characters, and no
+// backslash characters, then we can safely slap some quotes around it.
+// Otherwise we must also replace the offending characters with safe escape
+// sequences.
+
+        rx_escapable.lastIndex = 0;
+        return rx_escapable.test(string)
+            ? "\"" + string.replace(rx_escapable, function (a) {
+                var c = meta[a];
+                return typeof c === "string"
+                    ? c
+                    : "\\u" + ("0000" + a.charCodeAt(0).toString(16)).slice(-4);
+            }) + "\""
+            : "\"" + string + "\"";
+    }
+
+
+    function str(key, holder) {
+
+// Produce a string from holder[key].
+
+        var i;          // The loop counter.
+        var k;          // The member key.
+        var v;          // The member value.
+        var length;
+        var mind = gap;
+        var partial;
+        var value = holder[key];
+
+// If the value has a toJSON method, call it to obtain a replacement value.
+
+        if (value && typeof value === "object" &&
+                typeof value.toJSON === "function") {
+            value = value.toJSON(key);
+        }
+
+// If we were called with a replacer function, then call the replacer to
+// obtain a replacement value.
+
+        if (typeof rep === "function") {
+            value = rep.call(holder, key, value);
+        }
+
+// What happens next depends on the value's type.
+
+        switch (typeof value) {
+        case "string":
+            return quote(value);
+
+        case "number":
+
+// JSON numbers must be finite. Encode non-finite numbers as null.
+
+            return isFinite(value)
+                ? String(value)
+                : "null";
+
+        case "boolean":
+        case "null":
+
+// If the value is a boolean or null, convert it to a string. Note:
+// typeof null does not produce "null". The case is included here in
+// the remote chance that this gets fixed someday.
+
+            return String(value);
+
+// If the type is "object", we might be dealing with an object or an array or
+// null.
+
+        case "object":
+
+// Due to a specification blunder in ECMAScript, typeof null is "object",
+// so watch out for that case.
+
+            if (!value) {
+                return "null";
+            }
+
+// Make an array to hold the partial results of stringifying this object value.
+
+            gap += indent;
+            partial = [];
+
+// Is the value an array?
+
+            if (Object.prototype.toString.apply(value) === "[object Array]") {
+
+// The value is an array. Stringify every element. Use null as a placeholder
+// for non-JSON values.
+
+                length = value.length;
+                for (i = 0; i < length; i += 1) {
+                    partial[i] = str(i, value) || "null";
+                }
+
+// Join all of the elements together, separated with commas, and wrap them in
+// brackets.
+
+                v = partial.length === 0
+                    ? "[]"
+                    : gap
+                        ? "[\n" + gap + partial.join(",\n" + gap) + "\n" + mind + "]"
+                        : "[" + partial.join(",") + "]";
+                gap = mind;
+                return v;
+            }
+
+// If the replacer is an array, use it to select the members to be stringified.
+
+            if (rep && typeof rep === "object") {
+                length = rep.length;
+                for (i = 0; i < length; i += 1) {
+                    if (typeof rep[i] === "string") {
+                        k = rep[i];
+                        v = str(k, value);
+                        if (v) {
+                            partial.push(quote(k) + (
+                                gap
+                                    ? ": "
+                                    : ":"
+                            ) + v);
+                        }
+                    }
+                }
+            } else {
+
+// Otherwise, iterate through all of the keys in the object.
+
+                for (k in value) {
+                    if (Object.prototype.hasOwnProperty.call(value, k)) {
+                        v = str(k, value);
+                        if (v) {
+                            partial.push(quote(k) + (
+                                gap
+                                    ? ": "
+                                    : ":"
+                            ) + v);
+                        }
+                    }
+                }
+            }
+
+// Join all of the member texts together, separated with commas,
+// and wrap them in braces.
+
+            v = partial.length === 0
+                ? "{}"
+                : gap
+                    ? "{\n" + gap + partial.join(",\n" + gap) + "\n" + mind + "}"
+                    : "{" + partial.join(",") + "}";
+            gap = mind;
+            return v;
+        }
+    }
+
+// If the JSON object does not yet have a stringify method, give it one.
+
+    if (typeof JSON.stringify !== "function") {
+        meta = {    // table of character substitutions
+            "\b": "\\b",
+            "\t": "\\t",
+            "\n": "\\n",
+            "\f": "\\f",
+            "\r": "\\r",
+            "\"": "\\\"",
+            "\\": "\\\\"
+        };
+        JSON.stringify = function (value, replacer, space) {
+
+// The stringify method takes a value and an optional replacer, and an optional
+// space parameter, and returns a JSON text. The replacer can be a function
+// that can replace values, or an array of strings that will select the keys.
+// A default replacer method can be provided. Use of the space parameter can
+// produce text that is more easily readable.
+
+            var i;
+            gap = "";
+            indent = "";
+
+// If the space parameter is a number, make an indent string containing that
+// many spaces.
+
+            if (typeof space === "number") {
+                for (i = 0; i < space; i += 1) {
+                    indent += " ";
+                }
+
+// If the space parameter is a string, it will be used as the indent string.
+
+            } else if (typeof space === "string") {
+                indent = space;
+            }
+
+// If there is a replacer, it must be a function or an array.
+// Otherwise, throw an error.
+
+            rep = replacer;
+            if (replacer && typeof replacer !== "function" &&
+                    (typeof replacer !== "object" ||
+                    typeof replacer.length !== "number")) {
+                throw new Error("JSON.stringify");
+            }
+
+// Make a fake root object containing our value under the key of "".
+// Return the result of stringifying the value.
+
+            return str("", {"": value});
+        };
+    }
+
+
+// If the JSON object does not yet have a parse method, give it one.
+
+    if (typeof JSON.parse !== "function") {
+        JSON.parse = function (text, reviver) {
+
+// The parse method takes a text and an optional reviver function, and returns
+// a JavaScript value if the text is a valid JSON text.
+
+            var j;
+
+            function walk(holder, key) {
+
+// The walk method is used to recursively walk the resulting structure so
+// that modifications can be made.
+
+                var k;
+                var v;
+                var value = holder[key];
+                if (value && typeof value === "object") {
+                    for (k in value) {
+                        if (Object.prototype.hasOwnProperty.call(value, k)) {
+                            v = walk(value, k);
+                            if (v !== undefined) {
+                                value[k] = v;
+                            } else {
+                                delete value[k];
+                            }
+                        }
+                    }
+                }
+                return reviver.call(holder, key, value);
+            }
+
+
+// Parsing happens in four stages. In the first stage, we replace certain
+// Unicode characters with escape sequences. JavaScript handles many characters
+// incorrectly, either silently deleting them, or treating them as line endings.
+
+            text = String(text);
+            rx_dangerous.lastIndex = 0;
+            if (rx_dangerous.test(text)) {
+                text = text.replace(rx_dangerous, function (a) {
+                    return "\\u" +
+                            ("0000" + a.charCodeAt(0).toString(16)).slice(-4);
+                });
+            }
+
+// In the second stage, we run the text against regular expressions that look
+// for non-JSON patterns. We are especially concerned with "()" and "new"
+// because they can cause invocation, and "=" because it can cause mutation.
+// But just to be safe, we want to reject all unexpected forms.
+
+// We split the second stage into 4 regexp operations in order to work around
+// crippling inefficiencies in IE's and Safari's regexp engines. First we
+// replace the JSON backslash pairs with "@" (a non-JSON character). Second, we
+// replace all simple value tokens with "]" characters. Third, we delete all
+// open brackets that follow a colon or comma or that begin the text. Finally,
+// we look to see that the remaining characters are only whitespace or "]" or
+// "," or ":" or "{" or "}". If that is so, then the text is safe for eval.
+
+            if (
+                rx_one.test(
+                    text
+                        .replace(rx_two, "@")
+                        .replace(rx_three, "]")
+                        .replace(rx_four, "")
+                )
+            ) {
+
+// In the third stage we use the eval function to compile the text into a
+// JavaScript structure. The "{" operator is subject to a syntactic ambiguity
+// in JavaScript: it can begin a block or an object literal. We wrap the text
+// in parens to eliminate the ambiguity.
+
+                j = eval("(" + text + ")");
+
+// In the optional fourth stage, we recursively walk the new structure, passing
+// each name/value pair to a reviver function for possible transformation.
+
+                return (typeof reviver === "function")
+                    ? walk({"": j}, "")
+                    : j;
+            }
+
+// If the text is not JSON parseable, then a SyntaxError is thrown.
+
+            throw new SyntaxError("JSON.parse");
+        };
+    }
+}());
+
+// EOF
+
+
 
 // More info here: http://www.barcodeisland.com/ean13.phtml
 
 $.localize = true; // enable ExtendScript localisation engine
 
+var version = '0.1';
+
+var platform = File.fs;
+if(platform == 'Windows'){
+    var trailSlash = "\\";
+} else if(platform == "Macintosh") {
+    var trailSlash = "/";
+} else {
+    var trailSlash = undefined;
+    throw( "Unsupported platform: "  + platform );
+}
+
+function newStdSetting(){
+  return { name              : "[ New Preset ]",
+           version           : version,
+           doc               : undefined,
+           pageIndex         : -1,
+           ean               : "",
+           addon             : "",
+           codeFont          : "OCR B Std\tRegular",
+           readFont          : "OCR B Std\tRegular", // Setting tracking to -100 is nice for this font
+           readFontTracking  : 0,
+           whiteBox          : true,
+           humanReadable     : true,
+           alignTo           : "Page Margins",
+           selectionBounds   : [0,0,0,0],
+           refPoint          : "BOTTOM_RIGHT_ANCHOR",
+           offset            : { x : 0, y : 0 },
+           humanReadableStr  : "",
+           createOulines     : true,
+           heightPercent     : 100 };
+}
+
+var stdSettings = [newStdSetting(),
+                   { name              : "[ Last Used ]",  // My personal preference :)
+                     version           : version,
+                     doc               : undefined,
+                     pageIndex         : -1,
+                     ean               : "",
+                     addon             : "",
+                     readFont          : "OCR B Std\tRegular", // Setting tracking to -100 is nice for this font
+                     codeFont          : "OCR B Std\tRegular",
+                     readFontTracking  : 0,
+                     whiteBox          : true,
+                     humanReadable     : true,
+                     alignTo           : "Page",
+                     selectionBounds   : [0,0,0,0],
+                     refPoint          : "CENTER_ANCHOR",
+                     offset            : { x : 0, y : 0 },
+                     humanReadableStr  : "",
+                     createOulines     : true,
+                     heightPercent     : 60 }];
+
+var presetsFilePath = Folder.userData + trailSlash + "EAN13_barcode_Settings.json";
+
+// Start preset manager
+var Jaxon = new jaxon(presetsFilePath, stdSettings, stdSettings[0], '[');
+
 function getStandardSettings(){
+  // Load presets
+  var presets = Jaxon.getPresets();
 
-  var Settings = {  doc               : undefined,
-                    pageIndex         : -1,
-                    EAN_Type          : "EAN-13",
-                    isbn              : "",
-                    addon             : "",
-                    isbnFont          : "OCR B Std\tRegular", // Setting tracking to -100 is nice for this font
-                    codeFont          : "OCR B Std\tRegular",
-                    isbnFontTracking  : 0,
-                    whiteBox          : true,
-                    humanReadable     : true,
-                    alignTo           : "Page",
-                    selectionBounds   : [0,0,0,0],
-                    refPoint          : "CENTER_ANCHOR",
-                    offset            : { x : 0, y : 0 },
-                    humanReadableStr  : "",
-                    createOulines     : true,
-                    heightPercent     : 60 }
-  
-  if (app.documents.length == 0) return Settings;
-  // else
-  Settings.doc = app.activeDocument;
+  if (app.documents.length == 0) return presets;
+  // else add active document setting to presets
 
-  if (Settings.doc.isValid) {
-      var tempData = Settings.doc.extractLabel('ISBN');
+  var activeDocSetting = newStdSetting();
+      activeDocSetting.doc = app.activeDocument;
+      activeDocSetting.name = "[ Active Document ]";
+
+  var addToSettings = false;
+
+  if (activeDocSetting.doc.isValid) {
+      /*
+      // This needs to be done on per found barcode basis!
+      var tempData = app.activeDocument.extractLabel('ISBN');
+      alert(tempData);
       if(tempData.length > 0){
-        Settings.EAN_Type = "ISBN";
-        Settings.isbn = tempData;
+        activeDocSetting.EAN_Type = "ISBN"; // Check for ean
+        activeDocSetting.ean = tempData;
+        addToSettings = true;
       }
-      var tempData = Settings.doc.extractLabel('id_barcode_settings'); //Always returns a string
+      */
+      var tempData = activeDocSetting.doc.extractLabel('id_barcode_settings'); //Always returns a string
       if(tempData.length > 0){
           try {
             tempData = eval(tempData);
             if( typeof tempData == 'object') {
-              if( tempData.hasOwnProperty('EAN_Type') ) {
-                Settings = tempData;
+              if( tempData.hasOwnProperty('ean') ) {
+                activeDocSetting = Jaxon.updatePreset(tempData,['version']);
+                addToSettings = true;
               }
             }
           } catch (nothing) {
-            return Settings;
+            return presets;
           }
       }
+      if(addToSettings) {
+        presets.unshift(activeDocSetting);
+      }
   }
-
-  return Settings;
+  // We should never get here but if we do
+  return presets;
 }
 
 function getBoundsInfo(bounds){
@@ -1615,7 +2283,7 @@ function getBoundsInfo(bounds){
 function setRuler(doc, myNewUnits){
         
     // This function sets the rulers to the disired measure units
-    // and returns the original setting that you can send back to
+    // and returns the original preset that you can send back to
     // this function to reset the rulers.
 
     var myOldUnits = {xruler : doc.viewPreferences.horizontalMeasurementUnits, yruler: doc.viewPreferences.verticalMeasurementUnits, origin: doc.viewPreferences.rulerOrigin, zeroPoint: doc.zeroPoint };
@@ -1792,18 +2460,18 @@ function getItemByLabel(myPageOrSpread, myLabel){
     return allItems;
 }
 
-function calcOffset(itemBounds, page, Settings){
+function calcOffset(itemBounds, page, preset){
 
   var ib = getBoundsInfo(itemBounds);
   var pb = getBoundsInfo(page.bounds);
 
-  if(Settings.alignTo == "barcode_box"){
-    Settings.selectionBounds = Settings.barcode_box.visibleBounds;
+  if(preset.alignTo == "barcode_box"){
+    preset.selectionBounds = preset.barcode_box.visibleBounds;
     // Now lets add it to the offsets
-    Settings.offset.x += Settings.selectionBounds[1];
-    Settings.offset.y += Settings.selectionBounds[0];
-    pb = getBoundsInfo(Settings.selectionBounds);
-  } else if(Settings.alignTo == "Selection"){
+    preset.offset.x += preset.selectionBounds[1];
+    preset.offset.y += preset.selectionBounds[0];
+    pb = getBoundsInfo(preset.selectionBounds);
+  } else if(preset.alignTo == "Selection"){
     for(var i=1;i<app.selection.length;i++){
       switch (app.selection[i].constructor.name){
         case "Rectangle":
@@ -1814,19 +2482,19 @@ function calcOffset(itemBounds, page, Settings){
         case "Group":
         case "PageItem":
           var itemBounds = app.selection[i].visibleBounds; //array [y1, x1, y2, x2], [top, left, bottom, right]
-          if(itemBounds[0] < Settings.selectionBounds[0]){ Settings.selectionBounds[0] = itemBounds[0]; }
-          if(itemBounds[1] < Settings.selectionBounds[1]){ Settings.selectionBounds[1] = itemBounds[1]; }
-          if(itemBounds[2] > Settings.selectionBounds[2]){ Settings.selectionBounds[2] = itemBounds[2]; }
-          if(itemBounds[3] > Settings.selectionBounds[3]){ Settings.selectionBounds[3] = itemBounds[2]; }
+          if(itemBounds[0] < preset.selectionBounds[0]){ preset.selectionBounds[0] = itemBounds[0]; }
+          if(itemBounds[1] < preset.selectionBounds[1]){ preset.selectionBounds[1] = itemBounds[1]; }
+          if(itemBounds[2] > preset.selectionBounds[2]){ preset.selectionBounds[2] = itemBounds[2]; }
+          if(itemBounds[3] > preset.selectionBounds[3]){ preset.selectionBounds[3] = itemBounds[2]; }
           break;
         default:
           break;
       }
     }
     // Now lets add it to the offsets
-    Settings.offset.x += Settings.selectionBounds[1];
-    Settings.offset.y += Settings.selectionBounds[0];
-    pb = getBoundsInfo(Settings.selectionBounds);
+    preset.offset.x += preset.selectionBounds[1];
+    preset.offset.y += preset.selectionBounds[0];
+    pb = getBoundsInfo(preset.selectionBounds);
   }
 
   function addToBounds(b, x, y) {
@@ -1838,7 +2506,7 @@ function calcOffset(itemBounds, page, Settings){
   }
 
   // Deal with page
-  switch (Settings.refPoint) {
+  switch (preset.refPoint) {
       case "TOP_LEFT_ANCHOR":
           //addToBounds(ib, 0, 0);
           break;
@@ -1871,7 +2539,7 @@ function calcOffset(itemBounds, page, Settings){
   }
   
   // Deal with margin
-  if(Settings.alignTo == "Page Margins"){
+  if(preset.alignTo == "Page Margins"){
     var mt = page.marginPreferences.top;
     var mr = page.marginPreferences.right;
     var ml = page.marginPreferences.left;
@@ -1892,7 +2560,7 @@ function calcOffset(itemBounds, page, Settings){
       marginInfo.horizontal.weight = 2;
     }
 
-    switch (Settings.refPoint) {
+    switch (preset.refPoint) {
       case "TOP_LEFT_ANCHOR":
           ib.bounds = addToBounds(ib.bounds, ml, mt); // X, Y
           break;
@@ -1986,38 +2654,38 @@ function calcOffset(itemBounds, page, Settings){
   }
 
   // Add UI bound offset
-  ib.bounds = addToBounds(ib.bounds, Settings.offset.x, Settings.offset.y);
+  ib.bounds = addToBounds(ib.bounds, preset.offset.x, preset.offset.y);
   return ib.bounds;
 }
 
-function showDialog(Settings) {
+function showDialog(presets, preset) {
 
   var selectionBounds, pageBounds, marginBounds = [0,0,0,0];
-  Settings.barcode_box = false;
+  preset.barcode_box = false;
 
-  if ( (Settings === null) || (typeof Settings !== 'object') ) {
-    var Settings = getStandardSettings();
+  var save = "Save Preset", clear = "Clear Preset";
+
+  if ( (preset === null) || (typeof preset !== 'object') ) {
+    var preset = presets[0];
   }
-  Settings.isbn  = (typeof Settings.isbn  == 'string') ? Settings.isbn  : "";
-  Settings.addon = (typeof Settings.addon == 'string') ? Settings.addon : "";
+
+  preset.ean   = (typeof preset.ean   == 'string') ? preset.ean   : "";
+  preset.addon = (typeof preset.addon == 'string') ? preset.addon : "";
 
   var selectionBounds, pageBounds, marginBounds = [0,0,0,0];
   var alignToOptions = ["Page", "Page Margins"];
-  var EAN_Type_Options = ["EAN-13","ISBN","ISSN","ISMN"];
   var docunits = "mm";
   var list_of_pages = ["1"];
 
-  if(Settings.doc == undefined) {
-    Settings.pageIndex = 0;
+  if(preset.doc == undefined) {
+    preset.pageIndex = 0;
   } else {
-
-    var list_of_pages = Settings.doc.pages.everyItem().name;
-
-    if( (Settings.pageIndex < 0) || (Settings.pageIndex > list_of_pages.length-1) ) {
+    var list_of_pages = preset.doc.pages.everyItem().name;
+    if( (preset.pageIndex < 0) || (preset.pageIndex > list_of_pages.length-1) ) {
       // Let’s see which page is selected
       for (var j=0; j<=list_of_pages.length-1; j++){
         if(list_of_pages[j] == app.activeWindow.activePage.name){
-          Settings.pageIndex = j;
+          preset.pageIndex = j;
           break;
         }
       }
@@ -2034,12 +2702,12 @@ function showDialog(Settings) {
         case "Group":
         case "PageItem":
           alignToOptions.push("Selection");
-          Settings.alignTo = "Selection";
+          preset.alignTo = "Selection";
           var selectionParentPage = app.selection[0].parentPage.name;
           // Let’s see which page contains selection
           for (var j=0; j<=list_of_pages.length-1; j++){
             if(list_of_pages[j] == selectionParentPage){
-              Settings.pageIndex = j;
+              preset.pageIndex = j;
               break;
             }
           }
@@ -2052,63 +2720,73 @@ function showDialog(Settings) {
     // see if there is a barcode box on active spread
     var barcode_boxes = getItemByLabel(app.activeWindow.activeSpread, "barcode_box");
     if( barcode_boxes.length > 0 ) {
-      Settings.barcode_box = barcode_boxes[0];
+      preset.barcode_box = barcode_boxes[0];
       alignToOptions.push("barcode_box");
-      Settings.alignTo = "barcode_box";
-      var selectionParentPage = Settings.barcode_box.parentPage.name;
+      preset.alignTo = "barcode_box";
+      var selectionParentPage = preset.barcode_box.parentPage.name;
       // Let’s see which page contains selection
       for (var j=0; j<=list_of_pages.length-1; j++){
         if(list_of_pages[j] == selectionParentPage){
-          Settings.pageIndex = j;
+          preset.pageIndex = j;
           break;
         }
       }
     }
-
   }
   
   //just for testing
-  //Settings.isbn  = '978-1-907360-21-3';
-  //Settings.addon = '50995';
+  //preset.ean   = '978-1-907360-21-3';
+  //preset.addon = '50995';
 
-  var dialog = new Window('dialog', 'New EAN-13 Barcode');
+  var dialog = new Window('dialog', 'EAN-13 Barcode Generator');
   dialog.orientation = 'column';
-  dialog.alignChildren = 'right';
+  dialog.alignChildren = 'left';
+  dialog.margins = [15,10,15,20];
+
+  //-------------
+  // EAN-13 Input
+  //-------------
+  var input = dialog.add('panel', undefined, 'New Barcode: ');
   
-  var input = dialog.add('panel', undefined, 'Barcode:');
-  input.margins = 10;
-  //input.alignment = "fill";
+  function updateEANTypeTo( EAN13_type ){
+  	var t = String( EAN13_type );
+  	if( t == "EAN-13" ) t = "Unknown";
+  	var r = "EAN-13";
+  	if( t.length > 0 ) {
+  		r += " [ " + t + " ]";
+  	}
+  	input.text = r + ":";
+  }
+  
+  input.margins = [10,20,10,20];
+  input.alignment = "fill";
   input.alignChildren = "left";
   input.orientation = 'row';
   
-  // This does not do anything as they are all EAN-13, but not everyone knows that.
-  var typeDropdown = input.add("dropdownlist", undefined, EAN_Type_Options);
-  typeDropdown.selection = find(EAN_Type_Options, Settings.EAN_Type);
-  
-  //input.add('statictext', undefined, 'ISBN:');
-  var edittext = input.add('edittext');
-  edittext.characters = 15;
-  edittext.active = true;
-  edittext.text = Settings.isbn;
+  var eanInput = input.add('edittext');
+  eanInput.characters = 15;
+  eanInput.active = true;
+  eanInput.text = preset.ean;
 
-  edittext.onChange = function () {
-    var digits = edittext.text.replace(/[^\dXx]+/g, '');
+  eanInput.onChange = function () {
+    var digits = eanInput.text.replace(/[^\dXx]+/g, '');
     if (digits.length == 8) {
       // ISSN
-      edittext.text = digits.substring(0, 4) + "-" + digits.substring(4, 8);
-      typeDropdown.selection = find(EAN_Type_Options, "ISSN");
+      eanInput.text = digits.substring(0, 4) + "-" + digits.substring(4, 8);
+      updateEANTypeTo("ISSN");
+      
       return;
 
     } else if (digits.length == 10) {
       // ISBN-10
       try {
-        var isbn = ISBN.parse(digits);
+        var ean = ISBN.parse(digits);
       } catch (err) {
         alert(err);
       }
-      if ( isbn && isbn.isIsbn10() ) {
-          edittext.text = ISBN.hyphenate(digits);
-          typeDropdown.selection = find(EAN_Type_Options, "ISBN");
+      if ( ean && ean.isIsbn10() ) {
+          eanInput.text = ISBN.hyphenate(digits);
+          updateEANTypeTo("ISBN");
           return;
       }
       return;
@@ -2117,8 +2795,8 @@ function showDialog(Settings) {
 
       if( digits.substring(0, 3) == "977") {
         // ISSN
-        edittext.text = "977-" + digits.substring(3, 7) + "-" + digits.substring(7, 10) + "-" + digits.substring(10, 12) + "-" + digits.substring(12, 13);
-        typeDropdown.selection = find(EAN_Type_Options, "ISSN");
+        eanInput.text = "977-" + digits.substring(3, 7) + "-" + digits.substring(7, 10) + "-" + digits.substring(10, 12) + "-" + digits.substring(12, 13);
+        updateEANTypeTo("ISSN");
         return;
 
       } else if ( digits.substring(0, 4) == "9790" ) { 
@@ -2146,21 +2824,21 @@ function showDialog(Settings) {
         }
 
         if(pubLen != 0) {
-          edittext.text = "979-0-" + digits.substring(4, 4+pubLen) + "-" + digits.substring(4+pubLen,12) + "-" + digits.substring(12,13);
-          typeDropdown.selection = find(EAN_Type_Options, "ISMN");
+          eanInput.text = "979-0-" + digits.substring(4, 4+pubLen) + "-" + digits.substring(4+pubLen,12) + "-" + digits.substring(12,13);
+          updateEANTypeTo("ISMN");
           return;
         }
 
       } else if ( digits.substring(0, 3) == "978" || digits.substring(0, 3) == "979") {
         // ISBN
         try {
-          var isbn = ISBN.parse(digits);
+          var ean = ISBN.parse(digits);
         } catch (err) {
           alert(err);
         }
-        if ( isbn && isbn.isIsbn13() ) {
-            edittext.text = ISBN.hyphenate(digits);
-            typeDropdown.selection = find(EAN_Type_Options, "ISBN");
+        if ( ean && ean.isIsbn13() ) {
+            eanInput.text = ISBN.hyphenate(digits);
+            updateEANTypeTo("ISBN");
             return;
         }
       }
@@ -2168,53 +2846,71 @@ function showDialog(Settings) {
     } // End digits length == 13
 
     // note returned yet...
-    typeDropdown.selection = find(EAN_Type_Options, "EAN-13");
-    edittext.text = edittext.text.replace(/ +/g, "-");
-    edittext.text = edittext.text.replace(/[^\dxX-]*/g, "").toUpperCase();
+    updateEANTypeTo("EAN-13");
+    eanInput.text = eanInput.text.replace(/ +/g, "-");
+    eanInput.text = eanInput.text.replace(/[^\dxX-]*/g, "").toUpperCase();
   }
 
   input.add('statictext', undefined, 'Addon (optional):');
   var addonText = input.add('edittext');
   addonText.characters = 5;
-  addonText.text = Settings.addon;
+  addonText.text = preset.addon;
 
   var pageSelectPrefix = input.add('statictext', undefined, 'Page:');
   var pageSelect = input.add('dropdownlist', undefined, list_of_pages);
-  pageSelect.selection = pageSelect.items[Settings.pageIndex];
+  pageSelect.selection = pageSelect.items[preset.pageIndex];
 
-  if(Settings.doc == undefined) {
+  if(preset.doc == undefined) {
     // Don't show page select when there is no document open
     pageSelect.visible = false;
     pageSelectPrefix.visible = false;
   }
+  
+  input.add('button', undefined, 'Generate', {name: 'ok'});
 
-  var fontPanel = dialog.add("panel", undefined, "Fonts");
-  fontPanel.margins = 10;
+
+  // START SETTINGS PANEL
+  var settingsPanel = dialog.add('group');
+	settingsPanel.margins = 0;
+	settingsPanel.alignment = "fill";
+	settingsPanel.alignChildren = "left";
+	settingsPanel.orientation = 'column';
+  
+  // Start Fonts Panel
+  // -----------------
+  var fontPanel = settingsPanel.add("panel", undefined, "Fonts");
+  fontPanel.margins = [10,15,10,20];
   fontPanel.alignment = "fill";
   fontPanel.alignChildren = "left";
   fontPanel.orientation = 'column';
 
   fontPanel.add('statictext', undefined, 'Machine-readable');
   var codeFontRow = fontPanel.add('group');
-  var codeFontSelect = FontSelect(codeFontRow, Settings.codeFont);
+  var codeFontSelect = FontSelect(codeFontRow, preset.codeFont);
   
   var HR = fontPanel.add ("checkbox", undefined, "Add human-readable");
-      HR.value = Settings.humanReadable;
-  var isbnFontRow = fontPanel.add('group');
-  var isbnFontSelect = FontSelect(isbnFontRow, Settings.isbnFont);
+      HR.value = preset.humanReadable;
+  var readFontRow = fontPanel.add('group');
+  var readFontSelect = FontSelect(readFontRow, preset.readFont);
+
+  // End Fonts Panel
+  // -----------------
 
   // Add options
-  var extraoptionsPanel = dialog.add('group');
-      extraoptionsPanel.alignChildren = "top";
-      extraoptionsPanel.orientation   = 'row';
+  // -----------
+
+  var extraoptionsPanel = settingsPanel.add('group');
+      extraoptionsPanel.margins = 0;
       extraoptionsPanel.alignment = "fill";
+      extraoptionsPanel.alignChildren = "left";
+      extraoptionsPanel.orientation   = 'row';
 
   /////////////////////
   // Start REF panel //
   /////////////////////
   var refPanel = extraoptionsPanel.add("panel", undefined, "Alignment");
   refPanel.margins = 20;
-  refPanel.alignment = "fill";
+  refPanel.alignment = "left";
   refPanel.alignChildren = "top";
   refPanel.orientation = 'row';
 
@@ -2260,15 +2956,16 @@ function showDialog(Settings) {
     }
   }
 
-  setSelectedReferencePoint(Settings.refPoint);
+  setSelectedReferencePoint(preset.refPoint);
   // END REF SQUARE GROUP //
 
   var optionPanel = refPanel.add("group");
   optionPanel.alignChildren = "top";
   optionPanel.orientation = 'column';
+  
 
   var alignToDropdown = optionPanel.add("dropdownlist", undefined, alignToOptions);
-  alignToDropdown.selection = find(alignToOptions, Settings.alignTo);
+  alignToDropdown.selection = find(alignToOptions, preset.alignTo);
 
   var offsetXRow = optionPanel.add("group");
   offsetXRow.alignChildren = "left";
@@ -2278,10 +2975,10 @@ function showDialog(Settings) {
   offsetYRow.orientation = "row";
 
   offsetXRow.add("statictext", undefined,"Offset X: ");
-  var offsetX = offsetXRow.add("edittext", undefined,[Settings.offset.x + " " + docunits]);
+  var offsetX = offsetXRow.add("edittext", undefined,[preset.offset.x + " " + docunits]);
   offsetX.characters=6;
   offsetYRow.add("statictext", undefined,"Offset Y: ");
-  var offsetY = offsetYRow.add("edittext", undefined,[Settings.offset.y + " " + docunits]);
+  var offsetY = offsetYRow.add("edittext", undefined,[preset.offset.y + " " + docunits]);
   offsetY.characters=6;
 
   offsetX.onChange = function () {offsetX.text = parseFloat(offsetX.text) + " " + docunits;}
@@ -2302,24 +2999,110 @@ function showDialog(Settings) {
 
   var heightAdjust = adjustPanel.add('group');
   heightAdjust.add('statictext', undefined, 'Height adjustment:');
-  var heightPercentInput = heightAdjust.add('edittext', undefined, Settings.heightPercent);
+  var heightPercentInput = heightAdjust.add('edittext', undefined, preset.heightPercent);
   heightPercentInput.characters = 4;
   heightPercentInput.onChanging = function () { heightPercentInput.text = String(parseFloat(heightPercentInput.text)) };
   heightAdjust.add('statictext', undefined, '%');
 
   var whiteBG = adjustPanel.add ("checkbox", undefined, "White background");
-      whiteBG.value = Settings.whiteBox || false;
+      whiteBG.value = preset.whiteBox || false;
 
   //////////////////////////
   // END Adjustment panel //
   //////////////////////////
 
+  // ----------------------
+  // -- Start preset group
+
+  var presetPanel = settingsPanel.add('group');
+  presetPanel.margins = [0,5,0,0];
+  presetPanel.orientation = 'row';
+  presetPanel.alignment = "right";
+
+  var presetDropDownList = new Array();
+  for (var i = 0; i < presets.length; i++){
+    presetDropDownList.push(presets[i].name);
+  }
+
+  var presetDropdown = presetPanel.add("dropdownlist", undefined, presetDropDownList);
+  presetDropdown.minimumSize = [215,25];
+  presetDropdown.selection = 0;
+
+  if(presetDropdown.selection.text.indexOf('[') == 0){
+      var addRemovePresetButton = presetPanel.add('button', undefined, save);
+    } else {
+      var addRemovePresetButton = presetPanel.add('button', undefined, clear);
+  }
+
+  presetDropdown.onChange = function(){
+    var pName = this.selection.text;
+    loadPresetData( Jaxon.getPreset("name", pName) );
+    if(pName.indexOf('[') == 0) {
+      addRemovePresetButton.text = save;
+    } else {
+      addRemovePresetButton.text = clear;
+    }
+  }
+
+  function updatePresetDropdown(){
+    presetDropdown.removeAll();
+    for (var i = 0; i < presets.length; i++){
+      presetDropdown.add("item", String(presets[i].name) );
+    }
+  }
+
+  function updatePresets() {
+    presets = Jaxon.getPresets();
+    updatePresetDropdown();
+  }
+
+  function addPreset(){
+    var pName = prompt("Name : ", "");
+    if(pName != null){
+      if( (pName.length <= 0) || (pName.indexOf('[') == 0) ){
+      alert("Not a valid name for preset!");
+        return addPreset();
+      }
+      updatePreset();
+      preset.name = pName;
+      if( Jaxon.addUniquePreset(preset, "name", preset.name) ) {
+        updatePresets();
+        presetDropdown.selection = presets.length-1;
+      }
+    } // else user pressed cancel
+  }
+
+  function removePreset(){
+    if( Jaxon.removePresets("name", presetDropdown.selection.text) ) {
+      updatePresets();
+      presetDropdown.selection = 0;
+    }
+  }
+
+  addRemovePresetButton.onClick = function () {
+    if( addRemovePresetButton.text == save){
+      addPreset();
+    } else {
+      removePreset();
+    }
+  }
+  
+  presetPanel.add('button', undefined, 'Cancel', {name: 'cancel'});
+
+  // -- End preset group
+  // ----------------------
+
+
+  // ADD BUTTON GROUP
+  /*
   var buttonGroup = dialog.add('group');
       buttonGroup.orientation = 'row';
       buttonGroup.alignment = 'right';
-      buttonGroup.margins = 10;
-      buttonGroup.add('button', undefined, 'Cancel', {name: 'cancel'});
-      buttonGroup.add('button', undefined, 'OK', {name: 'ok'});
+      buttonGroup.margins = [10,15,10,10];
+  buttonGroup.add('button', undefined, 'Cancel', {name: 'cancel'});
+  buttonGroup.add('button', undefined, 'Generate', {name: 'ok'});
+  */
+  // END BUTTON GROUP
 
   function clearSelectedReferencePoint(){
     for(var i = 0; i < 3; i++){
@@ -2384,75 +3167,112 @@ function showDialog(Settings) {
     }
   }
 
+  function updatePreset(){
+    // This function updates the preset with UI input
+    // Get fonts
+    preset.codeFont      = codeFontSelect.getFont();
+    preset.readFont      = readFontSelect.getFont();
+    // Get input
+    preset.ean           = eanInput.text.replace(/[^0-9X\-]/gi, ''); // Preserve human readable
+    preset.addon         = addonText.text.replace(/[^\d]+/g, '');
+    // Get Custom Settings
+    preset.heightPercent = heightPercentInput.text.replace(/[^\d]+/g, '');
+    preset.whiteBox      = whiteBG.value;
+    preset.humanReadable = HR.value;
+    preset.alignTo       = alignToDropdown.selection.text;
+    preset.refPoint      = getSelectedReferencePoint();
+    preset.offset        = { x : parseFloat(offsetX.text), y : parseFloat(offsetY.text) };
+    preset.pageIndex     = pageSelect.selection.index;
+    //preset.readFontTracking = ;
+    //preset.createOulines = ;
+  }
+  
+  function loadPresetData(p) {
+    try {
+      // Set fonts
+      codeFontSelect.setFont(p.codeFont);
+      readFontSelect.setFont(p.readFont);
+      // Set input
+      eanInput.text             = p.ean;
+      addonText.text            = p.addon;
+      // Set Custom Settings
+      heightPercentInput.text   = p.heightPercent;
+      whiteBG.value             = p.whiteBox;
+      HR.value                  = p.humanReadable;
+      alignToDropdown.selection = find(alignToOptions, p.alignTo);
+      setSelectedReferencePoint(p.refPoint);
+      offsetX.text              = p.offset.x;
+      offsetY.text              = p.offset.y;
+      pageSelect.selection      = p.pageIndex;
+      // = p.readFontTracking;
+      // = p.createOulines;
+
+    } catch (err) {
+      alert(err);
+    }
+  }
+
   if (dialog.show() === 1) {
-    // Save user settings
-    Settings.isbnFont      = isbnFontSelect.getFont();
-    Settings.codeFont      = codeFontSelect.getFont();
-    Settings.isbn          = edittext.text.replace(/[^0-9X\-]/gi, ''); // Preserve human readable
-    Settings.addon         = addonText.text.replace(/[^\d]+/g, '');
-    Settings.heightPercent = heightPercentInput.text.replace(/[^\d]+/g, '');
-    Settings.whiteBox      = whiteBG.value;
-    Settings.humanReadable = HR.value;
-    Settings.alignTo       = alignToDropdown.selection.text;
-    Settings.refPoint      = getSelectedReferencePoint();
-    Settings.offset        = { x : parseFloat(offsetX.text), y : parseFloat(offsetY.text) };
-    Settings.pageIndex     = pageSelect.selection.index;
-    
-    var pureEAN = Settings.isbn.replace(/[^\dXx]+/g, '');
+    // Save user presets
+    updatePreset();
+    var pureEAN = preset.ean.replace(/[^\dXx]+/g, '');
 
-    if( (Settings.addon != "") && (Settings.addon.length != 2) && (Settings.addon.length != 5) ){
-      alert("Addon should be 2 or 5 digits long.\nLength is: " + Settings.addon.length );
-      return showDialog(Settings); // Restart
-    }
-
-    if( !checkCheckDigit(pureEAN) ) {
-      alert("Check digit does not match.\n" + Settings.isbn);
-      return showDialog(Settings); // Restart
-    }
-    
-    if(pureEAN.length == 13){
+    if( pureEAN.length == 0 ) {
+      alert("Please enter a valid EAN code.\n");
+      return showDialog(presets, preset); // Restart
+    } else if(pureEAN.length == 13){
         if(pureEAN.substring(0, 3) == "977"){
             var ISSN = pureEAN.substring(3, 10);
-            Settings.humanReadableStr = "ISSN" + String.fromCharCode(0x2007) + ISSN.substring(0, 4) + "-" + ISSN.substring(4, 7) + calculateCheckDigit(ISSN);
+            preset.humanReadableStr = "ISSN" + String.fromCharCode(0x2007) + ISSN.substring(0, 4) + "-" + ISSN.substring(4, 7) + calculateCheckDigit(ISSN);
         } else if(pureEAN.substring(0, 4) == "9790"){
-            Settings.humanReadableStr = "ISMN" + String.fromCharCode(0x2007) + Settings.isbn;
+            preset.humanReadableStr = "ISMN" + String.fromCharCode(0x2007) + preset.ean;
         } else if(pureEAN.substring(0, 3) == "978" || pureEAN.substring(0, 3) == "979" ){
-            Settings.humanReadableStr = "ISBN" + String.fromCharCode(0x2007) + Settings.isbn;
+            preset.humanReadableStr = "ISBN" + String.fromCharCode(0x2007) + preset.ean;
         } else {
-            Settings.humanReadableStr = ""; // Country or Coupon EAN-13
+            preset.humanReadableStr = ""; // Country or Coupon EAN-13
         }
     } else if(pureEAN.length == 10){
         // ISBN-10
-        Settings.humanReadableStr = "ISBN" + String.fromCharCode(0x2007) + Settings.isbn;
-        Settings.isbn = ISBN.asIsbn13(pureEAN, true);
+        preset.humanReadableStr = "ISBN" + String.fromCharCode(0x2007) + preset.ean;
+        preset.ean = ISBN.asIsbn13(pureEAN, true);
     } else if(pureEAN.length == 8){
         // ISSN
-        Settings.humanReadableStr = "ISSN" + String.fromCharCode(0x2007) + Settings.isbn;
-        Settings.isbn = "977" + pureEAN.substring(0, 7) + "00";
-        Settings.isbn = Settings.isbn + calculateCheckDigit(Settings.isbn+"X");
+        preset.humanReadableStr = "ISSN" + String.fromCharCode(0x2007) + preset.ean;
+        preset.ean = "977" + pureEAN.substring(0, 7) + "00";
+        preset.ean = preset.ean + calculateCheckDigit(preset.ean+"X");
+    }
+
+    if( !checkCheckDigit(preset.ean) ) {
+      alert("Check digit does not match.\n" + preset.ean);
+      return showDialog(presets, preset); // Restart
+    }
+
+    if( (preset.addon != "") && (preset.addon.length != 2) && (preset.addon.length != 5) ){
+      alert("Addon should be 2 or 5 digits long.\nLength is: " + preset.addon.length );
+      return showDialog(presets, preset); // Restart
     }
     
-    if( (Settings.isbnFont == null) || (Settings.codeFont == null) ){
-        if(Settings.isbnFont == null) Settings.isbnFont = "";
-        if(Settings.codeFont == null) Settings.codeFont = "";
+    if( (preset.readFont == null) || (preset.codeFont == null) ){
+        if(preset.readFont == null) preset.readFont = "";
+        if(preset.codeFont == null) preset.codeFont = "";
         alert("Please select your fonts first");
-        return showDialog(Settings); // Restart
+        return showDialog(presets, preset); // Restart
     }
     
 
-    if( Settings.alignTo == "barcode_box" ) {
-      var originalRulers = setRuler(Settings.doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
-      Settings.selectionBounds = Settings.barcode_box.visibleBounds;
-      setRuler(Settings.doc, originalRulers);
-    } else if( Settings.alignTo == "Selection" ) {
-      var originalRulers = setRuler(Settings.doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
-      Settings.selectionBounds = app.selection[0].visibleBounds;
-      setRuler(Settings.doc, originalRulers);
+    if( preset.alignTo == "barcode_box" ) {
+      var originalRulers = setRuler(preset.doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
+      preset.selectionBounds = preset.barcode_box.visibleBounds;
+      setRuler(preset.doc, originalRulers);
+    } else if( preset.alignTo == "Selection" ) {
+      var originalRulers = setRuler(preset.doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
+      preset.selectionBounds = app.selection[0].visibleBounds;
+      setRuler(preset.doc, originalRulers);
     } else {
-      Settings.selectionBounds = [0,0,0,0];
+      preset.selectionBounds = [0,0,0,0];
     }
     
-    return Settings;
+    return preset;
   }
   else {
     // User pressed cancel
@@ -2495,7 +3315,7 @@ var BarcodeDrawer = (function () {
     return rect;
   }
 
-  function getCurrentOrNewDocument(Settings, size) {
+  function getCurrentOrNewDocument(preset, size) {
     var doc = undefined;
     try {
       var doc = app.activeDocument;
@@ -2575,17 +3395,17 @@ var BarcodeDrawer = (function () {
     hpos += 2;
   }
 
-  function outline(Settings, textBox){
-    if(Settings.createOulines) {
+  function outline(preset, textBox){
+    if(preset.createOulines) {
       try{
         textBox.createOutlines();
       } catch (err) {
         alert("Could not create outlines\n" + err.description);
-        Settings.createOulines = false; // Don't show this message again :)
+        preset.createOulines = false; // Don't show this message again :)
       }
     }
   }
-  function drawMain(Settings, barWidths) {
+  function drawMain(preset, barWidths) {
     var pattern = null;
     var widths = null;
     var barWidth = null;
@@ -2594,17 +3414,17 @@ var BarcodeDrawer = (function () {
     // calculate the initial fontsize 
     // and use this size to draw the other characters
     // this makes sure all numbers are the same size
-    var textBox = drawChar(Settings, hpos - 10, '9', Settings.codeFont, 13, false); //initial '9'
+    var textBox = drawChar(preset, hpos - 10, '9', preset.codeFont, 13, false); //initial '9'
     var fontSize = fitTextBox(textBox, true, true); // Fit type size
 
-    outline(Settings, textBox);
+    outline(preset, textBox);
 
     for (var i = 0; i < barWidths.length; i++) {
       pattern  = barWidths[i][0];
       widths   = barWidths[i][1];
       digit    = barWidths[i][2];
 
-      outline( Settings, drawChar(Settings, hpos, digit, Settings.codeFont, fontSize, true) );
+      outline( preset, drawChar(preset, hpos, digit, preset.codeFont, fontSize, true) );
 
       for (var j = 0; j < 4; j++) {
         barWidth = widths[j];
@@ -2620,7 +3440,7 @@ var BarcodeDrawer = (function () {
     return fontSize;
   }
 
-  function drawAddon(Settings, addonWidths) {
+  function drawAddon(preset, addonWidths) {
     var pattern = null;
     var widths = null;
     var aWidth = null;
@@ -2633,9 +3453,9 @@ var BarcodeDrawer = (function () {
       digit = addonWidths[i][2]; //may be undefined
 
       if (digit) {
-        var textBox = drawChar(Settings, hpos, digit, Settings.codeFont, Settings.codeFontSize-1, true, -addonHeight-10);
+        var textBox = drawChar(preset, hpos, digit, preset.codeFont, preset.codeFontSize-1, true, -addonHeight-10);
         textBox.textFramePreferences.verticalJustification = VerticalJustification.BOTTOM_ALIGN;
-        outline(Settings, textBox);
+        outline(preset, textBox);
       }
 
       for (var j = 0; j < widths.length; j++) {
@@ -2702,7 +3522,7 @@ var BarcodeDrawer = (function () {
     }
   }
 
-  function drawChar(Settings, x, character, font, fontSize, fitBox, yOffset) {
+  function drawChar(preset, x, character, font, fontSize, fitBox, yOffset) {
     var yOffset = yOffset || 0;
     var y = yOffset + vOffset + height + 2;
     var boxWidth = 7;
@@ -2729,20 +3549,20 @@ var BarcodeDrawer = (function () {
     whiteBox.label = "barcode_whiteBox";
   }
 
-  function init(Settings) {
+  function init(preset) {
     scale = 0.3;
-    heightAdjustPercent = Settings.heightPercent;
+    heightAdjustPercent = preset.heightPercent;
     vOffset = 5;
-    if(Settings.humanReadable) {
+    if(preset.humanReadable) {
       vOffset = 10;
     }
     
     height = 60 + vOffset;
     width = 112;
 
-    if(String(Settings.addon).length == 5) {
+    if(String(preset.addon).length == 5) {
         width = 175;
-    } else if (String(Settings.addon).length == 2) {
+    } else if (String(preset.addon).length == 2) {
         width = 148;
     }
     guardHeight = 75;
@@ -2761,25 +3581,23 @@ var BarcodeDrawer = (function () {
     return {  width : width * scale, height : _height * scale };
   }
 
-  function drawBarcode(Settings) {
-    var barcode = Barcode().init(Settings);
+  function drawBarcode(preset) {
+    var barcode = Barcode().init(preset);
     var barWidths = barcode.getNormalisedWidths();
     var addonWidths = barcode.getNormalisedAddon();
 
-    init(Settings);
+    init(preset);
     
     var size = getSize();
     
-    doc = getCurrentOrNewDocument(Settings, size);
-    // Save data in doc so we can load this back into UI
-    doc.insertLabel('id_barcode_settings', Settings.toSource() );
-    // Save EAN-13 in a seperate label for other scripts to use
-    doc.insertLabel(Settings.EAN_Type, Settings.isbn );
-
-    if( (Settings.pageIndex < 0) || (Settings.pageIndex > doc.pages.length-1) ) {
+    doc = getCurrentOrNewDocument(preset, size);
+    doc.insertLabel('build_by_ean13barcodegenerator', "true" );
+    // We don't want to update page sizes in documents not build by this plugin.
+	
+    if( (preset.pageIndex < 0) || (preset.pageIndex > doc.pages.length-1) ) {
       page = doc.pages[0];
     } else {
-      page = doc.pages[Settings.pageIndex];
+      page = doc.pages[preset.pageIndex];
     }
 
     originalRulers = setRuler(doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
@@ -2794,33 +3612,33 @@ var BarcodeDrawer = (function () {
 
     bgSwatchName = 'None';
 
-    if(Settings.whiteBox){
+    if(preset.whiteBox){
       bgSwatchName = 'Paper';
     }
 
     drawWhiteBox();
     
-    if(Settings.humanReadable) {
+    if(preset.humanReadable) {
       var textBox = drawText(hpos - 7, vOffset - 8, 102, 6.5, 
-        Settings.humanReadableStr, Settings.isbnFont, 13, Justification.FULLY_JUSTIFIED, VerticalJustification.BOTTOM_ALIGN);
+        preset.humanReadableStr, preset.readFont, 13, Justification.FULLY_JUSTIFIED, VerticalJustification.BOTTOM_ALIGN);
 
       try {
         textBox.parentStory.otfFigureStyle = OTFFigureStyle.PROPORTIONAL_LINING;
         textBox.parentStory.kerningMethod = "$ID/Optical"; // Most fonts have bad kerning for all caps characters
-        textBox.parentStory.tracking = Settings.isbnFontTracking;
+        textBox.parentStory.tracking = preset.readFontTracking;
       } catch (e) {
-        alert("Warning setting story preferences: " + e);
+        alert("Warning preset story preferences: " + e);
       }
 
       fitTextBox(textBox, true, false);
-      outline(Settings, textBox);
+      outline(preset, textBox);
     }
 
     startGuards();
-    Settings.codeFontSize = drawMain(Settings, barWidths);
+    preset.codeFontSize = drawMain(preset, barWidths);
     endGuards();
     if (addonWidths) {
-      drawAddon(Settings, addonWidths);
+      drawAddon(preset, addonWidths);
     }
     var BarcodeGroup = page.groups.add(layer.allPageItems);
 
@@ -2828,7 +3646,7 @@ var BarcodeDrawer = (function () {
 
     // Let's position the barcode now
     BarcodeGroup.move(page.parent.pages[0]);
-    BarcodeGroup.visibleBounds = calcOffset(BarcodeGroup.visibleBounds, page, Settings);
+    BarcodeGroup.visibleBounds = calcOffset(BarcodeGroup.visibleBounds, page, preset);
     
     //reset rulers
     setRuler(doc, originalRulers);
@@ -2839,16 +3657,16 @@ var BarcodeDrawer = (function () {
   }
 })();
 
-function main(Settings){
-  var newSettings = showDialog(Settings);
-  if (newSettings) {
+function main(presets){
+  var newSetting = showDialog(presets, presets[0]);
+  if (newSetting) {
       try {
-        BarcodeDrawer.drawBarcode(newSettings);
+        BarcodeDrawer.drawBarcode(newSetting);
       } catch( error ) {
         // Alert nice error
         alert("Oops, Having trouble creating a quality barcode:\n" + "Line " + error.line + ": " + error);
-        // Restart UI so we can either correct the ISBN or select a valid font
-        main(newSettings);
+        // Restart UI so we can either correct the EAN or select a valid font.
+        main(presets, newSetting);
       }
   } // else: user pressed cancel
 }
@@ -2858,5 +3676,3 @@ try {
 } catch ( error ) {
   alert("Oops, Having trouble creating a quality barcode:\n" + "Line " + error.line + ": " + error);
 }
-
-

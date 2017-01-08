@@ -1,3 +1,4 @@
+Copyright (c) 2016 Bruno Herfst, http://coverbuilder.brunoherfst.com
 Copyright (c) 2011 Nick Morgan, http://skilldrick.co.uk
 
 Permission is hereby granted, free of charge, to any person obtaining a copy

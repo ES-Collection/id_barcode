@@ -137,18 +137,18 @@ var Barcode = function () {
   function stripAddon(str) {
     return str.replace(/[^\d]+/g, '');
   }
-  function stripISBN(str) {
+  function stripEAN(str) {
     return str.replace(/[^0-9X]/gi, '');
   }
 
   return {
-    init: function (Settings) {
-      var isbnStr  = String(Settings.isbn);
-      var addonStr = String(Settings.addon);
+    init: function (preset) {
+      var eanStr   = String(preset.ean);
+      var addonStr = String(preset.addon);
       
-      if (isbnStr) {
-        barcode_string = isbnStr;
-        stripped = stripISBN(barcode_string);
+      if (eanStr) {
+        barcode_string = eanStr;
+        stripped = stripEAN(barcode_string);
         if ( !checkCheckDigit(stripped) ) {
           throw "Check digit incorrect";
         }
@@ -192,7 +192,7 @@ var Barcode = function () {
         }
         var norm = getNorm(barWidths[i]);
         current.push(norm);
-        current.push(stripped[i+1]); //add isbn digit
+        current.push(stripped[i+1]); //add ean digit
         normalisedWidths.push(current);
       }
       return normalisedWidths;
