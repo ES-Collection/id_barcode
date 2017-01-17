@@ -19,7 +19,7 @@ if(platform == 'Windows'){
     throw( "Unsupported platform: "  + platform );
 }
 
-function newStdSetting(){
+function newPreset(){
   return { name              : "[ New Preset ]",
            version           : version,
            doc               : undefined,
@@ -40,7 +40,7 @@ function newStdSetting(){
            heightPercent     : 100 };
 }
 
-var stdSettings = [newStdSetting(),
+var stdSettings = [newPreset(),
                    { name              : "[ Last Used ]",  // My personal preference :)
                      version           : version,
                      doc               : undefined,
@@ -65,49 +65,50 @@ var presetsFilePath = Folder.userData + trailSlash + "EAN13_barcode_Settings.jso
 // Start preset manager
 var Jaxon = new jaxon(presetsFilePath, stdSettings, stdSettings[0], '[');
 
+function getBarcodePreset(pageItem){
+  var tempData = pageItem.label;
+  if(tempData.length > 0){
+    var bData = Jaxon.JSON.parse(tempData);
+    if( typeof bData == 'object' && bData.hasOwnProperty('ean') ) {
+      return Jaxon.updatePreset(bData,['name']);
+    }
+  }
+  return false;
+}
+
 function getStandardSettings(){
   // Load presets
   var presets = Jaxon.getPresets();
-
-  if (app.documents.length == 0) return presets;
+  if (app.documents.length <= 0) return presets;
   // else add active document setting to presets
 
-  var activeDocSetting = newStdSetting();
-      activeDocSetting.doc = app.activeDocument;
-      activeDocSetting.name = "[ Active Document ]";
+  var aDoc = app.activeDocument;
 
-  var addToSettings = false;
-
-  if (activeDocSetting.doc.isValid) {
-      /*
-      // This needs to be done on per found barcode basis!
-      var tempData = app.activeDocument.extractLabel('ISBN');
-      alert(tempData);
-      if(tempData.length > 0){
-        activeDocSetting.EAN_Type = "ISBN"; // Check for ean
-        activeDocSetting.ean = tempData;
-        addToSettings = true;
+  if (aDoc.isValid) {
+    var existingBarcodes = getItemsByName(aDoc, "Barcode_Settings");
+    if(existingBarcodes.length > 0) {
+      for (i = 0; i < existingBarcodes.length; i++) { 
+        var eBarcodePreset = getBarcodePreset(existingBarcodes[i]);
+        if(eBarcodePreset) {
+           eBarcodePreset.doc  = aDoc;
+           eBarcodePreset.name = "[ "+ eBarcodePreset.ean +" ]";
+           presets.unshift(eBarcodePreset);
+        }
       }
-      */
-      var tempData = activeDocSetting.doc.extractLabel('id_barcode_settings'); //Always returns a string
-      if(tempData.length > 0){
-          try {
-            tempData = eval(tempData);
-            if( typeof tempData == 'object') {
-              if( tempData.hasOwnProperty('ean') ) {
-                activeDocSetting = Jaxon.updatePreset(tempData,['version']);
-                addToSettings = true;
-              }
-            }
-          } catch (nothing) {
-            return presets;
-          }
+    } else {
+      // Only go through this routine if there are no barcode boxes found
+      var aDocPreset      = newPreset();
+          aDocPreset.doc  = aDoc;
+          aDocPreset.name = "[ Active Document ]";
+      // Check if there is an entry for EAN
+      var tempData = aDoc.extractLabel('EAN');
+      if( tempData.length > 0 ){
+        aDocPreset.ean  = tempData;
       }
-      if(addToSettings) {
-        presets.unshift(activeDocSetting);
-      }
+      
+      presets.unshift(aDocPreset);
+    }
   }
-  // We should never get here but if we do
   return presets;
 }
 
@@ -289,12 +290,30 @@ function find(haystack, needle) {
     return 0; // Return the first element if nothing is found
 }
 
-function getItemByLabel(myPageOrSpread, myLabel){
+function getItemsByName(DocPageSpread, myName){
     // This funcion returns an array of all items found with given label
     // If nothing is found this function returns an empty array
     var allItems = new Array();
-    if(myPageOrSpread.isValid){
-        var myElements = myPageOrSpread.allPageItems;
+    if(DocPageSpread.isValid){
+        var myElements = DocPageSpread.allPageItems;
+        var len = myElements.length;
+        for (var i = len-1; i >= 0; i--){
+            if(myElements[i].name == myName){
+                allItems.push(myElements[i]);
+            }
+        }
+    } else {
+        alert("ERROR 759403253473: Expected a valid doc, page or spread.");
+    }     
+    return allItems;
+}
+
+function getItemsByLabel(DocPageSpread, myLabel){
+    // This funcion returns an array of all items found with given label
+    // If nothing is found this function returns an empty array
+    var allItems = new Array();
+    if(DocPageSpread.isValid){
+        var myElements = DocPageSpread.allPageItems;
         var len = myElements.length;
         for (var i = len-1; i >= 0; i--){
             if(myElements[i].label == myLabel){
@@ -302,7 +321,7 @@ function getItemByLabel(myPageOrSpread, myLabel){
             }
         }
         // Guides are not part of pageItems but they can have labels too!
-        var myGuides   = myPageOrSpread.guides;
+        var myGuides   = DocPageSpread.guides;
         var len = myGuides.length;
         for (var i = len-1; i >= 0; i--){
             if(myGuides[i].label == myLabel){
@@ -310,7 +329,7 @@ function getItemByLabel(myPageOrSpread, myLabel){
             }
         }
     } else {
-        alert("ERROR 759403253473: Expected a valid page or spread.");
+        alert("ERROR 759403253473: Expected a valid doc, page or spread.");
     }     
     return allItems;
 }
@@ -516,8 +535,9 @@ function calcOffset(itemBounds, page, preset){
 function showDialog(presets, preset) {
 
   var selectionBounds, pageBounds, marginBounds = [0,0,0,0];
-  preset.barcode_box = false;
-
+  
+  preset.barcode_box = false;  
+  
   var save = "Save Preset", clear = "Clear Preset";
 
   if ( (preset === null) || (typeof preset !== 'object') ) {
@@ -573,7 +593,7 @@ function showDialog(presets, preset) {
     }
 
     // see if there is a barcode box on active spread
-    var barcode_boxes = getItemByLabel(app.activeWindow.activeSpread, "barcode_box");
+    var barcode_boxes = getItemsByLabel(app.activeWindow.activeSpread, "barcode_box");
     if( barcode_boxes.length > 0 ) {
       preset.barcode_box = barcode_boxes[0];
       alignToOptions.push("barcode_box");
@@ -604,13 +624,13 @@ function showDialog(presets, preset) {
   var input = dialog.add('panel', undefined, 'New Barcode: ');
   
   function updateEANTypeTo( EAN13_type ){
-  	var t = String( EAN13_type );
-  	if( t == "EAN-13" ) t = "Unknown";
-  	var r = "EAN-13";
-  	if( t.length > 0 ) {
-  		r += " [ " + t + " ]";
-  	}
-  	input.text = r + ":";
+    var t = String( EAN13_type );
+    if( t == "EAN-13" ) t = "Unknown";
+    var r = "EAN-13";
+    if( t.length > 0 ) {
+      r += " [ " + t + " ]";
+    }
+    input.text = r + ":";
   }
   
   input.margins = [10,20,10,20];
@@ -726,10 +746,10 @@ function showDialog(presets, preset) {
 
   // START SETTINGS PANEL
   var settingsPanel = dialog.add('group');
-	settingsPanel.margins = 0;
-	settingsPanel.alignment = "fill";
-	settingsPanel.alignChildren = "left";
-	settingsPanel.orientation = 'column';
+  settingsPanel.margins = 0;
+  settingsPanel.alignment = "fill";
+  settingsPanel.alignChildren = "left";
+  settingsPanel.orientation = 'column';
   
   // Start Fonts Panel
   // -----------------
@@ -775,15 +795,15 @@ function showDialog(presets, preset) {
 
   var topRow = refSquare.add("group");
   for(var i = 0; i < 3; i++){
-  topRow.add("radiobutton", undefined,"");
+    topRow.add("radiobutton", undefined,"");
   }
   var midRow = refSquare.add("group");
   for(var i = 0; i < 3; i++){
-  midRow.add("radiobutton", undefined,"");
+    midRow.add("radiobutton", undefined,"");
   }
   var botRow = refSquare.add("group");
   for(var i = 0; i < 3; i++){
-  botRow.add("radiobutton", undefined,"");
+    botRow.add("radiobutton", undefined,"");
   }
 
   // Add event listeners
@@ -1037,7 +1057,7 @@ function showDialog(presets, preset) {
     preset.alignTo       = alignToDropdown.selection.text;
     preset.refPoint      = getSelectedReferencePoint();
     preset.offset        = { x : parseFloat(offsetX.text), y : parseFloat(offsetY.text) };
-    preset.pageIndex     = pageSelect.selection.index;
+    preset.pageIndex     = pageSelect.selection.index || 0;
     //preset.readFontTracking = ;
     //preset.createOulines = ;
   }
@@ -1048,8 +1068,11 @@ function showDialog(presets, preset) {
       codeFontSelect.setFont(p.codeFont);
       readFontSelect.setFont(p.readFont);
       // Set input
-      eanInput.text             = p.ean;
-      addonText.text            = p.addon;
+      // Don’t update EAN if there is allready one in dialog
+      if(eanInput.text.length < 8) {
+        eanInput.text             = p.ean;
+        addonText.text            = p.addon;
+      }
       // Set Custom Settings
       heightPercentInput.text   = p.heightPercent;
       whiteBG.value             = p.whiteBox;
@@ -1059,11 +1082,10 @@ function showDialog(presets, preset) {
       offsetX.text              = p.offset.x;
       offsetY.text              = p.offset.y;
       pageSelect.selection      = p.pageIndex;
-      // = p.readFontTracking;
-      // = p.createOulines;
-
+      preset.readFontTracking   = p.readFontTracking;
+      preset.createOulines      = p.createOulines;
     } catch (err) {
-      alert(err);
+      alert("Error loading presets: " + err);
     }
   }
 
@@ -1127,6 +1149,9 @@ function showDialog(presets, preset) {
       preset.selectionBounds = [0,0,0,0];
     }
     
+    preset.readFontTracking = parseFloat(preset.readFontTracking);
+    preset.pageIndex        = pageSelect.selection.index || 0;
+
     return preset;
   }
   else {
@@ -1165,6 +1190,7 @@ var BarcodeDrawer = (function () {
     boxHeight *= scale;
     var rect = page.rectangles.add();
     rect.strokeWeight = 0;
+    rect.strokeColor = "None";
     rect.fillColor = colour || "Black";
     rect.geometricBounds = [y, x, y + boxHeight, x + boxWidth];
     return rect;
@@ -1188,6 +1214,7 @@ var BarcodeDrawer = (function () {
       app.marginPreferences.right  = 0;
 
       doc = app.documents.add();
+      doc.insertLabel('build_by_ean13barcodegenerator', 'true');
 
       doc.viewPreferences.horizontalMeasurementUnits = MeasurementUnits.MILLIMETERS;
       doc.viewPreferences.verticalMeasurementUnits   = MeasurementUnits.MILLIMETERS;
@@ -1253,13 +1280,16 @@ var BarcodeDrawer = (function () {
   function outline(preset, textBox){
     if(preset.createOulines) {
       try{
-        textBox.createOutlines();
+        elements = textBox.createOutlines();
+        return elements;
       } catch (err) {
         alert("Could not create outlines\n" + err.description);
         preset.createOulines = false; // Don't show this message again :)
       }
     }
+    return textBox;
   }
+
   function drawMain(preset, barWidths) {
     var pattern = null;
     var widths = null;
@@ -1383,7 +1413,7 @@ var BarcodeDrawer = (function () {
     var boxWidth = 7;
     var boxHeight = 9;
     var textBox = drawText(x, y, boxWidth, boxHeight, character, font, fontSize, Justification.LEFT_ALIGN, VerticalJustification.TOP_ALIGN);
-    	textBox.parentStory.alignToBaseline = false;
+      textBox.parentStory.alignToBaseline = false;
     // We don't want lining figures!
     try {
       textBox.parentStory.otfFigureStyle = OTFFigureStyle.TABULAR_LINING;
@@ -1399,9 +1429,17 @@ var BarcodeDrawer = (function () {
     return textBox;
   }
 
+  function savePresets() {
+    var savePresetBox = drawBox(hpos - 10, 0, width, height+12+vOffset, 'None');
+        savePresetBox.label = String(presetString);
+        savePresetBox.name  = "Barcode_Settings";
+    return savePresetBox;
+  }
+
   function drawWhiteBox() {
     var whiteBox = drawBox(hpos - 10, 0, width, height+12+vOffset, bgSwatchName);
     whiteBox.label = "barcode_whiteBox";
+    return whiteBox;
   }
 
   function init(preset) {
@@ -1428,7 +1466,7 @@ var BarcodeDrawer = (function () {
     reduce = 0.3;
     devider = 1/reduce;
     hpos = 10;
-
+    presetString = Jaxon.presetString( Jaxon.updatePreset(preset, ['name']) );
   }
 
   function getSize(){
@@ -1446,9 +1484,7 @@ var BarcodeDrawer = (function () {
     var size = getSize();
     
     doc = getCurrentOrNewDocument(preset, size);
-    doc.insertLabel('build_by_ean13barcodegenerator', "true" );
-    // We don't want to update page sizes in documents not build by this plugin.
-	
+  
     if( (preset.pageIndex < 0) || (preset.pageIndex > doc.pages.length-1) ) {
       page = doc.pages[0];
     } else {
@@ -1471,8 +1507,12 @@ var BarcodeDrawer = (function () {
       bgSwatchName = 'Paper';
     }
 
+    var barcodeElements = new Array();
+
     drawWhiteBox();
     
+    savePresets();
+
     if(preset.humanReadable) {
       var textBox = drawText(hpos - 7, vOffset - 8, 102, 6.5, 
         preset.humanReadableStr, preset.readFont, 13, Justification.FULLY_JUSTIFIED, VerticalJustification.BOTTOM_ALIGN);
@@ -1482,7 +1522,7 @@ var BarcodeDrawer = (function () {
         textBox.parentStory.kerningMethod = "$ID/Optical"; // Most fonts have bad kerning for all caps characters
         textBox.parentStory.tracking = preset.readFontTracking;
       } catch (e) {
-        alert("Warning preset story preferences: " + e);
+        alert("Warning drawBarcode(): Could not set story preference.\n" + e);
       }
 
       fitTextBox(textBox, true, false);
@@ -1495,6 +1535,7 @@ var BarcodeDrawer = (function () {
     if (addonWidths) {
       drawAddon(preset, addonWidths);
     }
+
     var BarcodeGroup = page.groups.add(layer.allPageItems);
 
     BarcodeGroup.label = "Barcode_Complete";
@@ -1513,13 +1554,17 @@ var BarcodeDrawer = (function () {
 })();
 
 function main(presets){
+  if (typeof presets == 'undefined' || presets.length <= 0) {
+    alert("Oops!\nDid not receive any presets.");
+    return;
+  }
   var newSetting = showDialog(presets, presets[0]);
   if (newSetting) {
       try {
         BarcodeDrawer.drawBarcode(newSetting);
       } catch( error ) {
         // Alert nice error
-        alert("Oops, Having trouble creating a quality barcode:\n" + "Line " + error.line + ": " + error);
+        alert("Oops!\nHaving trouble creating a quality barcode: " + "Line " + error.line + ": " + error);
         // Restart UI so we can either correct the EAN or select a valid font.
         main(presets, newSetting);
       }
@@ -1529,5 +1574,5 @@ function main(presets){
 try {
   main(getStandardSettings());  
 } catch ( error ) {
-  alert("Oops, Having trouble creating a quality barcode:\n" + "Line " + error.line + ": " + error);
+  alert("Oops!\nHaving trouble creating a quality barcode: " + "Line " + error.line + ": " + error);
 }

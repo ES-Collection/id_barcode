@@ -19,24 +19,21 @@
 */
 
 var jaxon = function(filePath, standardPresets, templatePreset, presetLockChar){
+
     // ref to self
     var self = this;
-    // ref to JSON
-    self.JSON     = JSON;
-    // standard file path
-    self.filePath = filePath;
-    // standard file
-    self.file     = File(self.filePath);
-    // standard Presets (Array of preset objects)
-    self.std      = standardPresets;
-    // surrent preset (The presets we manipulate)
-    self.presets  = self.std;
-    // template preset (For validation and return)
-    self.template = templatePreset;
-    // preset locking character
-    // any preset starting with this character cannot be changed by the user
-    // users cannot start a preset with this character
-    self.lockChar = presetLockChar || '-';
+
+    self._clone = function( something ) {
+        //clones whatever it is given via JSON conversion
+        return self.JSON.parse(self.JSON.stringify( something ));
+    }
+
+    self._not_in_array = function(arr, element) {
+        for(var i=0; i<arr.length; i++) {
+            if (arr[i] == element) return false;
+        }
+        return true;
+    }
 
     self._fileExist = function(filePath) {
         var f = File(filePath);
@@ -72,7 +69,7 @@ var jaxon = function(filePath, standardPresets, templatePreset, presetLockChar){
         // This function will try and copy the old presets
         for (var key in NewPreset) {
             if(OldPreset.hasOwnProperty(key)){
-                if (!key in ignoreKeys){
+                if ( self._not_in_array(ignoreKeys, key) ){
                     NewPreset[key] = OldPreset[key];
                 }
             }
@@ -112,14 +109,32 @@ var jaxon = function(filePath, standardPresets, templatePreset, presetLockChar){
         self.presets = presets;
         return self.presets;
     }
+    
+    //  standardPresets, templatePreset,
+
+    // ref to JSON
+    self.JSON     = JSON;
+    // standard file path
+    self.filePath = filePath;
+    // standard file
+    self.file     = File(self.filePath);
+    // current preset (The presets we manipulate)
+    self.presets  = self._clone(standardPresets);
+    // A template preset (For validation and return)
+    self.template = self._clone(templatePreset);
+    // preset locking character
+    // any preset starting with this character cannot be changed by the user
+    // users cannot start a preset with this character
+    self.lockChar = presetLockChar || '-';
+
 
     //-------------------------------------------------
     // S T A R T   P U B L I C   A P I
     //-------------------------------------------------
     
     self.getPresets = function(){
-        // return a copy not ref to self
-        return self.JSON.parse(self.JSON.stringify(self.presets));
+        // return a copy of all presets
+        return self._clone(self.presets);
     }
 
     self.getPreset = function(key, val) {
@@ -137,8 +152,8 @@ var jaxon = function(filePath, standardPresets, templatePreset, presetLockChar){
 
         return null;
     }
-	
-	self.addPreset = function(obj) {
+    
+    self.addPreset = function(obj) {
         // Add optional before/after key?
         self.presets.push(obj);
         if( self._savePresets(self.filePath, self.presets) ) {
@@ -164,8 +179,13 @@ var jaxon = function(filePath, standardPresets, templatePreset, presetLockChar){
     }
     
     self.updatePreset = function(obj, ignoreKeys) {
-    	var ignoreKeys = ignoreKeys || [];
-    	return self._updatePreset(obj, self.std, ignoreKeys);
+        var ignoreKeys = ignoreKeys || [];
+        if(! ignoreKeys instanceof Array) {
+            throw "The function updatePreset expects ignoreKeys be type of array."
+        }
+        // Create a copy of the standard preset
+        var newPreset  = self._clone(self.template);
+        return self._updatePreset(obj, newPreset, ignoreKeys);
     }
     
     self.removePresets = function(key, val) {
@@ -192,7 +212,11 @@ var jaxon = function(filePath, standardPresets, templatePreset, presetLockChar){
         }
         return false;
     }
-	
+    
+    self.presetString = function( obj ) {
+        return self.JSON.stringify(obj);
+    }
+    
     //-------------------------------------------------
     // E N D   P U B L I C   A P I
     //-------------------------------------------------
