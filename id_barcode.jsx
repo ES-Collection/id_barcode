@@ -2234,8 +2234,8 @@ var presetsFilePath = Folder.userData + trailSlash + "EAN13_barcode_Settings.jso
 // Start preset manager
 var Jaxon = new jaxon(presetsFilePath, stdSettings, stdSettings[0], '[');
 
-function getBarcodePreset(barcodeGroup){
-  var tempData = barcodeGroup.rectangles[0].label
+function getBarcodePreset(pageItem){
+  var tempData = pageItem.label;
   if(tempData.length > 0){
     var bData = Jaxon.JSON.parse(tempData);
     if( typeof bData == 'object' && bData.hasOwnProperty('ean') ) {
@@ -2254,7 +2254,7 @@ function getStandardSettings(){
   var aDoc = app.activeDocument;
 
   if (aDoc.isValid) {
-    var existingBarcodes = getItemsByLabel(aDoc, "Barcode_Settings");
+    var existingBarcodes = getItemsByName(aDoc, "Barcode_Settings");
     if(existingBarcodes.length > 0) {
       for (i = 0; i < existingBarcodes.length; i++) { 
         var eBarcodePreset = getBarcodePreset(existingBarcodes[i]);
@@ -2457,6 +2457,24 @@ function find(haystack, needle) {
         if(haystack[i] == needle) return i;
     }
     return 0; // Return the first element if nothing is found
+}
+
+function getItemsByName(DocPageSpread, myName){
+    // This funcion returns an array of all items found with given label
+    // If nothing is found this function returns an empty array
+    var allItems = new Array();
+    if(DocPageSpread.isValid){
+        var myElements = DocPageSpread.allPageItems;
+        var len = myElements.length;
+        for (var i = len-1; i >= 0; i--){
+            if(myElements[i].name == myName){
+                allItems.push(myElements[i]);
+            }
+        }
+    } else {
+        alert("ERROR 759403253473: Expected a valid doc, page or spread.");
+    }     
+    return allItems;
 }
 
 function getItemsByLabel(DocPageSpread, myLabel){
@@ -3219,8 +3237,11 @@ function showDialog(presets, preset) {
       codeFontSelect.setFont(p.codeFont);
       readFontSelect.setFont(p.readFont);
       // Set input
-      eanInput.text             = p.ean;
-      addonText.text            = p.addon;
+      // Don’t update EAN if there is allready one in dialog
+      if(eanInput.text.length < 8) {
+        eanInput.text             = p.ean;
+        addonText.text            = p.addon;
+      }
       // Set Custom Settings
       heightPercentInput.text   = p.heightPercent;
       whiteBG.value             = p.whiteBox;
@@ -3363,6 +3384,7 @@ var BarcodeDrawer = (function () {
 
       doc = app.documents.add();
       doc.insertLabel('build_by_ean13barcodegenerator', 'true');
+      doc.insertLabel('EAN-13', preset.ean);
 
       doc.viewPreferences.horizontalMeasurementUnits = MeasurementUnits.MILLIMETERS;
       doc.viewPreferences.verticalMeasurementUnits   = MeasurementUnits.MILLIMETERS;
@@ -3578,14 +3600,10 @@ var BarcodeDrawer = (function () {
   }
 
   function savePresets() {
-    var savePresetBox1 = drawBox(hpos - 10, 0, width, height+12+vOffset, 'None');
-    savePresetBox1.label = String(presetString);
-    var savePresetBox2 = drawBox(hpos - 10, 0, width, height+12+vOffset, 'None');
-    savePresetBox2.label = String(presetString);
-    var currPage = savePresetBox1.parentPage;
-    var presetGroup = currPage.groups.add([savePresetBox1, savePresetBox2]);
-    presetGroup.label = "Barcode_Settings";
-    return presetGroup;
+    var savePresetBox = drawBox(hpos - 10, 0, width, height+12+vOffset, 'None');
+        savePresetBox.label = String(presetString);
+        savePresetBox.name  = "Barcode_Settings";
+    return savePresetBox;
   }
 
   function drawWhiteBox() {
@@ -3661,9 +3679,10 @@ var BarcodeDrawer = (function () {
 
     var barcodeElements = new Array();
 
-    //savePresets();
     drawWhiteBox();
     
+    savePresets();
+
     if(preset.humanReadable) {
       var textBox = drawText(hpos - 7, vOffset - 8, 102, 6.5, 
         preset.humanReadableStr, preset.readFont, 13, Justification.FULLY_JUSTIFIED, VerticalJustification.BOTTOM_ALIGN);
@@ -3687,17 +3706,14 @@ var BarcodeDrawer = (function () {
       drawAddon(preset, addonWidths);
     }
 
-    try {
-      var BarcodeGroup = page.groups.add(page.allPageItems);
-      BarcodeGroup.label = "Barcode_Complete";
+    var BarcodeGroup = page.groups.add(layer.allPageItems);
 
-      // Let's position the barcode now
-      BarcodeGroup.move(page.parent.pages[0]);
-      BarcodeGroup.visibleBounds = calcOffset(BarcodeGroup.visibleBounds, page, preset);
-    } catch (err) {
-      alert(err);
-    }
+    BarcodeGroup.label = "Barcode_Complete";
 
+    // Let's position the barcode now
+    BarcodeGroup.move(page.parent.pages[0]);
+    BarcodeGroup.visibleBounds = calcOffset(BarcodeGroup.visibleBounds, page, preset);
+    
     //reset rulers
     setRuler(doc, originalRulers);
   }

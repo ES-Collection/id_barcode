@@ -1234,6 +1234,8 @@ var BarcodeDrawer = (function () {
       app.marginPreferences.bottom = originalMarginPreference.bottom;
       app.marginPreferences.right  = originalMarginPreference.right ;
     }
+    
+    doc.insertLabel('EAN-13', preset.ean);
     return doc;
   }
 
