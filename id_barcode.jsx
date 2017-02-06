@@ -2206,7 +2206,8 @@ function newPreset(){
            offset            : { x : 0, y : 0 },
            humanReadableStr  : "",
            createOulines     : true,
-           heightPercent     : 100 };
+           heightPercent     : 100,
+           qZoneIndicator    : true };
 }
 
 var stdSettings = [newPreset(),
@@ -2227,7 +2228,8 @@ var stdSettings = [newPreset(),
                      offset            : { x : 0, y : 0 },
                      humanReadableStr  : "",
                      createOulines     : true,
-                     heightPercent     : 60 }];
+                     heightPercent     : 60,
+                     qZoneIndicator    : false }];
 
 var presetsFilePath = Folder.userData + trailSlash + "EAN13_barcode_Settings.json";
 
@@ -2503,6 +2505,31 @@ function getItemsByLabel(DocPageSpread, myLabel){
     return allItems;
 }
 
+function getMaxBounds( pageElementArray ){
+  var maxBounds = pageElementArray[0].visibleBounds; //array [y1, x1, y2, x2], [top, left, bottom, right]
+  for(var i=1;i<pageElementArray.length;i++){
+    switch (pageElementArray[i].constructor.name){
+      case "Rectangle":
+      case "TextFrame":
+      case "Oval":
+      case "Polygon":
+      case "GraphicLine":
+      case "Group":
+      case "PageItem":
+        var itemBounds = pageElementArray[i].visibleBounds; //array [y1, x1, y2, x2], [top, left, bottom, right]
+        if(itemBounds[0] < maxBounds[0]){ maxBounds[0] = itemBounds[0]; }
+        if(itemBounds[1] < maxBounds[1]){ maxBounds[1] = itemBounds[1]; }
+        if(itemBounds[2] > maxBounds[2]){ maxBounds[2] = itemBounds[2]; }
+        if(itemBounds[3] > maxBounds[3]){ maxBounds[3] = itemBounds[2]; }
+        break;
+      default:
+        alert("getMaxBounds() received " + pageElementArray[i].constructor.name);
+        break;
+    }
+  }
+  return maxBounds;
+}
+
 function calcOffset(itemBounds, page, preset){
 
   var ib = getBoundsInfo(itemBounds);
@@ -2515,25 +2542,7 @@ function calcOffset(itemBounds, page, preset){
     preset.offset.y += preset.selectionBounds[0];
     pb = getBoundsInfo(preset.selectionBounds);
   } else if(preset.alignTo == "Selection"){
-    for(var i=1;i<app.selection.length;i++){
-      switch (app.selection[i].constructor.name){
-        case "Rectangle":
-        case "TextFrame":
-        case "Oval":
-        case "Polygon":
-        case "GraphicLine":
-        case "Group":
-        case "PageItem":
-          var itemBounds = app.selection[i].visibleBounds; //array [y1, x1, y2, x2], [top, left, bottom, right]
-          if(itemBounds[0] < preset.selectionBounds[0]){ preset.selectionBounds[0] = itemBounds[0]; }
-          if(itemBounds[1] < preset.selectionBounds[1]){ preset.selectionBounds[1] = itemBounds[1]; }
-          if(itemBounds[2] > preset.selectionBounds[2]){ preset.selectionBounds[2] = itemBounds[2]; }
-          if(itemBounds[3] > preset.selectionBounds[3]){ preset.selectionBounds[3] = itemBounds[2]; }
-          break;
-        default:
-          break;
-      }
-    }
+    preset.selectionBounds = getMaxBounds( app.selection );
     // Now lets add it to the offsets
     preset.offset.x += preset.selectionBounds[1];
     preset.offset.y += preset.selectionBounds[0];
@@ -3384,7 +3393,6 @@ var BarcodeDrawer = (function () {
 
       doc = app.documents.add();
       doc.insertLabel('build_by_ean13barcodegenerator', 'true');
-      doc.insertLabel('EAN-13', preset.ean);
 
       doc.viewPreferences.horizontalMeasurementUnits = MeasurementUnits.MILLIMETERS;
       doc.viewPreferences.verticalMeasurementUnits   = MeasurementUnits.MILLIMETERS;
@@ -3404,6 +3412,8 @@ var BarcodeDrawer = (function () {
       app.marginPreferences.bottom = originalMarginPreference.bottom;
       app.marginPreferences.right  = originalMarginPreference.right ;
     }
+    
+    doc.insertLabel('EAN-13', preset.ean);
     return doc;
   }
 
@@ -3450,14 +3460,14 @@ var BarcodeDrawer = (function () {
   function outline(preset, textBox){
     if(preset.createOulines) {
       try{
-        elements = textBox.createOutlines();
-        return elements;
+        element = textBox.createOutlines();
+        return element;
       } catch (err) {
         alert("Could not create outlines\n" + err.description);
         preset.createOulines = false; // Don't show this message again :)
       }
     }
-    return textBox;
+    return [textBox];
   }
 
   function drawMain(preset, barWidths) {
@@ -3469,7 +3479,7 @@ var BarcodeDrawer = (function () {
     // calculate the initial fontsize 
     // and use this size to draw the other characters
     // this makes sure all numbers are the same size
-    var textBox = drawChar(preset, hpos - 10, '9', preset.codeFont, 13, false); //initial '9'
+    var textBox = drawChar(preset, hpos - 10, '9', preset.codeFont, 20, false); //initial '9'
     var fontSize = fitTextBox(textBox, true, true); // Fit type size
 
     outline(preset, textBox);
@@ -3613,7 +3623,11 @@ var BarcodeDrawer = (function () {
   }
 
   function init(preset) {
-    scale = 0.3;
+    // When any of these barcodes is at
+    // its nominal or 100% size the width
+    // of the narrowest bar or space is
+    // 0.33 mm
+    scale = 1; // 0.33 == 100% // 0.264 == 80% // 0.31 Penguin
     heightAdjustPercent = preset.heightPercent;
     vOffset = 5;
     if(preset.humanReadable) {
@@ -3621,20 +3635,22 @@ var BarcodeDrawer = (function () {
     }
     
     height = 60 + vOffset;
-    width = 112;
+    width = 114;
 
     if(String(preset.addon).length == 5) {
-        width = 175;
+        width = 177;
     } else if (String(preset.addon).length == 2) {
-        width = 148;
+        width = 150;
     }
     guardHeight = 75;
     addonHeight = 60;
     height = (height / 100) * heightAdjustPercent;
     guardHeight  = (guardHeight / 100) * heightAdjustPercent;
     addonHeight  = (addonHeight / 100) * heightAdjustPercent;
-    reduce = 0.3;
-    devider = 1/reduce;
+
+    // Gain control: Dependent on paper properties and dot distribution. Best to leave to CtP process.
+    reduce = 0; // 10% dotgain == 0.1
+    
     hpos = 10;
     presetString = Jaxon.presetString( Jaxon.updatePreset(preset, ['name']) );
   }
@@ -3652,6 +3668,7 @@ var BarcodeDrawer = (function () {
     init(preset);
     
     var size = getSize();
+    var startingpos = hpos - 7;
     
     doc = getCurrentOrNewDocument(preset, size);
   
@@ -3683,9 +3700,23 @@ var BarcodeDrawer = (function () {
     
     savePresets();
 
+    startGuards();
+    preset.codeFontSize = drawMain(preset, barWidths);
+    endGuards();
+
+    if(preset.qZoneIndicator) {
+      var textBox = drawChar(preset, hpos, '>', preset.codeFont, preset.codeFontSize, true); //quiet zone indicator '>'
+      var elements = outline(preset, textBox);
+      var elementBounds = getMaxBounds( elements );
+      alert(elementBounds);
+      var humanReadableWidth = elementBounds[3] - startingpos;
+    } else {
+      var humanReadableWidth = hpos - startingpos;
+    }
+
     if(preset.humanReadable) {
-      var textBox = drawText(hpos - 7, vOffset - 8, 102, 6.5, 
-        preset.humanReadableStr, preset.readFont, 13, Justification.FULLY_JUSTIFIED, VerticalJustification.BOTTOM_ALIGN);
+      var textBox = drawText( startingpos, vOffset - 8, humanReadableWidth, 6.5, 
+        preset.humanReadableStr, preset.readFont, 20, Justification.FULLY_JUSTIFIED, VerticalJustification.BOTTOM_ALIGN);
 
       try {
         textBox.parentStory.otfFigureStyle = OTFFigureStyle.PROPORTIONAL_LINING;
@@ -3699,9 +3730,6 @@ var BarcodeDrawer = (function () {
       outline(preset, textBox);
     }
 
-    startGuards();
-    preset.codeFontSize = drawMain(preset, barWidths);
-    endGuards();
     if (addonWidths) {
       drawAddon(preset, addonWidths);
     }
