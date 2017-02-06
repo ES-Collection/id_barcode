@@ -3060,6 +3060,9 @@ function showDialog(presets, preset) {
   var whiteBG = adjustPanel.add ("checkbox", undefined, "White background");
       whiteBG.value = preset.whiteBox || false;
 
+  var quietZoneIndicator = adjustPanel.add ("checkbox", undefined, "Quiet Zone Indicator");
+      quietZoneIndicator.value = preset.qZoneIndicator || false;
+
   //////////////////////////
   // END Adjustment panel //
   //////////////////////////
@@ -3223,19 +3226,20 @@ function showDialog(presets, preset) {
   function updatePreset(){
     // This function updates the preset with UI input
     // Get fonts
-    preset.codeFont      = codeFontSelect.getFont();
-    preset.readFont      = readFontSelect.getFont();
+    preset.codeFont       = codeFontSelect.getFont();
+    preset.readFont       = readFontSelect.getFont();
     // Get input
-    preset.ean           = eanInput.text.replace(/[^0-9X\-]/gi, ''); // Preserve human readable
-    preset.addon         = addonText.text.replace(/[^\d]+/g, '');
+    preset.ean            = eanInput.text.replace(/[^0-9X\-]/gi, ''); // Preserve human readable
+    preset.addon          = addonText.text.replace(/[^\d]+/g, '');
     // Get Custom Settings
-    preset.heightPercent = heightPercentInput.text.replace(/[^\d]+/g, '');
-    preset.whiteBox      = whiteBG.value;
-    preset.humanReadable = HR.value;
-    preset.alignTo       = alignToDropdown.selection.text;
-    preset.refPoint      = getSelectedReferencePoint();
-    preset.offset        = { x : parseFloat(offsetX.text), y : parseFloat(offsetY.text) };
-    preset.pageIndex     = pageSelect.selection.index || 0;
+    preset.heightPercent  = heightPercentInput.text.replace(/[^\d]+/g, '');
+    preset.whiteBox       = whiteBG.value;
+    preset.qZoneIndicator = quietZoneIndicator.value;
+    preset.humanReadable  = HR.value;
+    preset.alignTo        = alignToDropdown.selection.text;
+    preset.refPoint       = getSelectedReferencePoint();
+    preset.offset         = { x : parseFloat(offsetX.text), y : parseFloat(offsetY.text) };
+    preset.pageIndex      = pageSelect.selection.index || 0;
     //preset.readFontTracking = ;
     //preset.createOulines = ;
   }
@@ -3627,7 +3631,7 @@ var BarcodeDrawer = (function () {
     // its nominal or 100% size the width
     // of the narrowest bar or space is
     // 0.33 mm
-    scale = 1; // 0.33 == 100% // 0.264 == 80% // 0.31 Penguin
+    scale = 0.33; // 0.33 == 100% // 0.264 == 80% // 0.31 Penguin
     heightAdjustPercent = preset.heightPercent;
     vOffset = 5;
     if(preset.humanReadable) {
@@ -3708,14 +3712,17 @@ var BarcodeDrawer = (function () {
       var textBox = drawChar(preset, hpos, '>', preset.codeFont, preset.codeFontSize, true); //quiet zone indicator '>'
       var elements = outline(preset, textBox);
       var elementBounds = getMaxBounds( elements );
-      alert(elementBounds);
+
+      if(scale != 0 && elementBounds[3] != 0) {
+        elementBounds[3] /= scale;
+      }
       var humanReadableWidth = elementBounds[3] - startingpos;
     } else {
       var humanReadableWidth = hpos - startingpos;
     }
 
     if(preset.humanReadable) {
-      var textBox = drawText( startingpos, vOffset - 8, humanReadableWidth, 6.5, 
+      var textBox = drawText( startingpos, vOffset - 8.5, humanReadableWidth, 6.5, 
         preset.humanReadableStr, preset.readFont, 20, Justification.FULLY_JUSTIFIED, VerticalJustification.BOTTOM_ALIGN);
 
       try {
