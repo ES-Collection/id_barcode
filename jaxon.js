@@ -106,6 +106,10 @@ var jaxon = function(filePath, standardPresets, templatePreset, presetLockChar){
             var presets = self.presets;
         }
 
+        for (var p in presets) {
+            presets[p] = self.updatePreset(presets[p], []);
+        }
+
         self.presets = presets;
         return self.presets;
     }

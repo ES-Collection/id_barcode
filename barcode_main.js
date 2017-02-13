@@ -7,62 +7,54 @@
 
 $.localize = true; // enable ExtendScript localisation engine
 
-var version = '0.1';
-
-var platform = File.fs;
-if(platform == 'Windows'){
-    var trailSlash = "\\";
-} else if(platform == "Macintosh") {
-    var trailSlash = "/";
-} else {
-    var trailSlash = undefined;
-    throw( "Unsupported platform: "  + platform );
-}
+var version = '0.2';
 
 function newPreset(){
-  return { name              : "[ New Preset ]",
-           version           : version,
-           doc               : undefined,
-           pageIndex         : -1,
-           ean               : "",
-           addon             : "",
-           codeFont          : "OCR B Std\tRegular",
-           readFont          : "OCR B Std\tRegular", // Setting tracking to -100 is nice for this font
-           readFontTracking  : 0,
-           whiteBox          : true,
-           humanReadable     : true,
-           alignTo           : "Page Margins",
-           selectionBounds   : [0,0,0,0],
-           refPoint          : "BOTTOM_RIGHT_ANCHOR",
-           offset            : { x : 0, y : 0 },
-           humanReadableStr  : "",
-           createOulines     : true,
-           heightPercent     : 100,
-           qZoneIndicator    : true };
+  return { name               : "[ New Preset ]",
+           version            : version,
+           doc                : undefined,
+           pageIndex          : -1,
+           ean                : "",
+           addon              : "",
+           codeFont           : "OCR B Std\tRegular",
+           readFont           : "OCR B Std\tRegular", // Setting tracking to -100 is nice for this font
+           readFontTracking   : 0,
+           whiteBox           : true,
+           humanReadable      : true,
+           alignTo            : "Page Margins",
+           selectionBounds    : [0,0,0,0],
+           refPoint           : "BOTTOM_RIGHT_ANCHOR",
+           offset             : { x : 0, y : 0 },
+           humanReadableStr   : "",
+           createOulines      : true,
+           heightPercent      : 100,
+           qZoneIndicator     : true,
+           addQuietZoneMargin : 0 };
 }
 
 var stdSettings = [newPreset(),
-                   { name              : "[ Last Used ]",  // My personal preference :)
-                     version           : version,
-                     doc               : undefined,
-                     pageIndex         : -1,
-                     ean               : "",
-                     addon             : "",
-                     readFont          : "OCR B Std\tRegular", // Setting tracking to -100 is nice for this font
-                     codeFont          : "OCR B Std\tRegular",
-                     readFontTracking  : 0,
-                     whiteBox          : true,
-                     humanReadable     : true,
-                     alignTo           : "Page",
-                     selectionBounds   : [0,0,0,0],
-                     refPoint          : "CENTER_ANCHOR",
-                     offset            : { x : 0, y : 0 },
-                     humanReadableStr  : "",
-                     createOulines     : true,
-                     heightPercent     : 60,
-                     qZoneIndicator    : false }];
+                   { name               : "[ Last Used ]",  // My personal preference :)
+                     version            : version,
+                     doc                : undefined,
+                     pageIndex          : -1,
+                     ean                : "",
+                     addon              : "",
+                     readFont           : "OCR B Std\tRegular", // Setting tracking to -100 is nice for this font
+                     codeFont           : "OCR B Std\tRegular",
+                     readFontTracking   : 0,
+                     whiteBox           : true,
+                     humanReadable      : true,
+                     alignTo            : "Page",
+                     selectionBounds    : [0,0,0,0],
+                     refPoint           : "CENTER_ANCHOR",
+                     offset             : { x : 0, y : 0 },
+                     humanReadableStr   : "",
+                     createOulines      : true,
+                     heightPercent      : 60,
+                     qZoneIndicator     : false,
+                     addQuietZoneMargin : 0 }];
 
-var presetsFilePath = Folder.userData + trailSlash + "EAN13_barcode_Settings.json";
+var presetsFilePath = Folder.userData + "/EAN13_barcode_Settings.json";
 
 // Start preset manager
 var Jaxon = new jaxon(presetsFilePath, stdSettings, stdSettings[0], '[');
@@ -772,8 +764,7 @@ function showDialog(presets, preset) {
   var codeFontRow = fontPanel.add('group');
   var codeFontSelect = FontSelect(codeFontRow, preset.codeFont);
   
-  var HR = fontPanel.add ("checkbox", undefined, "Add human-readable");
-      HR.value = preset.humanReadable;
+  fontPanel.add('statictext', undefined, 'Human-readable');
   var readFontRow = fontPanel.add('group');
   var readFontSelect = FontSelect(readFontRow, preset.readFont);
 
@@ -893,6 +884,9 @@ function showDialog(presets, preset) {
 
   var quietZoneIndicator = adjustPanel.add ("checkbox", undefined, "Quiet Zone Indicator");
       quietZoneIndicator.value = preset.qZoneIndicator || false;
+
+  var HR = adjustPanel.add ("checkbox", undefined, "Human-readable");
+      HR.value = preset.humanReadable;
 
   //////////////////////////
   // END Adjustment panel //
@@ -1445,14 +1439,14 @@ var BarcodeDrawer = (function () {
   }
 
   function savePresets() {
-    var savePresetBox = drawBox(hpos - 10, 0, width, height+12+vOffset, 'None');
+    var savePresetBox = drawBox(hpos - startX, 0, width, height+12+vOffset, 'None');
         savePresetBox.label = String(presetString);
         savePresetBox.name  = "Barcode_Settings";
     return savePresetBox;
   }
 
   function drawWhiteBox() {
-    var whiteBox = drawBox(hpos - 10, 0, width, height+12+vOffset, bgSwatchName);
+    var whiteBox = drawBox(hpos - startX, 0, width, height+12+vOffset, bgSwatchName);
     whiteBox.label = "barcode_whiteBox";
     return whiteBox;
   }
@@ -1486,7 +1480,10 @@ var BarcodeDrawer = (function () {
     // Gain control: Dependent on paper properties and dot distribution. Best to leave to CtP process.
     reduce = 0; // 10% dotgain == 0.1
     
-    hpos = 10;
+    startX = 10 + preset.addQuietZoneMargin;
+    hpos = startX+0;
+    width += (preset.addQuietZoneMargin*2);
+
     presetString = Jaxon.presetString( Jaxon.updatePreset(preset, ['name']) );
   }
 
