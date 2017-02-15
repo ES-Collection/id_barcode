@@ -1,3 +1,4 @@
+[![Stories in Ready](https://badge.waffle.io/GitBruno/id_barcode.png?label=ready&title=Ready)](https://waffle.io/GitBruno/id_barcode)
 InDesign Barcode maker
 ======================
 
