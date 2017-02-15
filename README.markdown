@@ -5,6 +5,8 @@ Easily make EAN-13 based barcodes in InDesign.
 
 Use [`id_barcode.jsx`](https://github.com/gitbruno/id_barcode/raw/master/id_barcode.jsx) if you just want to use the plugin.
 
+[![Stories in Ready](https://badge.waffle.io/GitBruno/id_barcode.png?label=ready&title=Ready)](https://waffle.io/GitBruno/id_barcode)
+[![Stories In Progress](https://badge.waffle.io/GitBruno/id_barcode.png?label=In%20Progress&title=In%20Progress)](https://waffle.io/GitBruno/id_barcode)
 
 ## Supported codes & symbologies
 
