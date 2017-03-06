@@ -28,6 +28,7 @@ function newPreset(){
            humanReadableStr   : "",
            createOulines      : true,
            heightPercent      : 100,
+           scalePercent       : 80,
            qZoneIndicator     : true,
            addQuietZoneMargin : 0 };
 }
@@ -51,6 +52,7 @@ var stdSettings = [newPreset(),
                      humanReadableStr   : "",
                      createOulines      : true,
                      heightPercent      : 60,
+                     scalePercent       : 100,
                      qZoneIndicator     : false,
                      addQuietZoneMargin : 0 }];
 
@@ -878,7 +880,14 @@ function showDialog(presets, preset) {
   heightPercentInput.characters = 4;
   heightPercentInput.onChanging = function () { heightPercentInput.text = String(parseFloat(heightPercentInput.text)) };
   heightAdjust.add('statictext', undefined, '%');
-
+  
+  var scaleAdjust = adjustPanel.add('group');
+  scaleAdjust.add('statictext', undefined, 'Scale:');
+  var scalePercentInput = scaleAdjust.add('edittext', undefined, preset.scalePercent);
+  scalePercentInput.characters = 4;
+  scalePercentInput.onChanging = function () { scalePercentInput.text = String(scalePercentInput.text); };
+  scaleAdjust.add('statictext', undefined, '%');
+  
   var whiteBG = adjustPanel.add ("checkbox", undefined, "White background");
       whiteBG.value = preset.whiteBox || false;
 
@@ -1057,6 +1066,7 @@ function showDialog(presets, preset) {
     preset.ean            = eanInput.text.replace(/[^0-9X\-]/gi, ''); // Preserve human readable
     preset.addon          = addonText.text.replace(/[^\d]+/g, '');
     // Get Custom Settings
+    preset.scalePercent   = scalePercentInput.text.replace(/[^\d]+/g, '');
     preset.heightPercent  = heightPercentInput.text.replace(/[^\d]+/g, '');
     preset.whiteBox       = whiteBG.value;
     preset.qZoneIndicator = quietZoneIndicator.value;
@@ -1081,6 +1091,7 @@ function showDialog(presets, preset) {
         addonText.text            = p.addon;
       }
       // Set Custom Settings
+      scalePercentInput.text    = p.scalePercent;
       heightPercentInput.text   = p.heightPercent;
       whiteBG.value             = p.whiteBox;
       HR.value                  = p.humanReadable;
@@ -1101,6 +1112,8 @@ function showDialog(presets, preset) {
     updatePreset();
     var pureEAN = preset.ean.replace(/[^\dXx]+/g, '');
 
+    // Check EAN
+    //----------
     if( pureEAN.length == 0 ) {
       alert("Please enter a valid EAN code.\n");
       return showDialog(presets, preset); // Restart
@@ -1136,6 +1149,15 @@ function showDialog(presets, preset) {
       return showDialog(presets, preset); // Restart
     }
     
+    // Check Scale Percent
+    //--------------------
+    if(preset.scalePercent > 200 || preset.scalePercent < 80 ) {
+      alert("Scale is outside target range.\nThe target size is 100% but the standards allow a range between 80% and 200%." );
+      return showDialog(presets, preset); // Restart
+    }
+
+    // Check Fonts
+    //------------
     if( (preset.readFont == null) || (preset.codeFont == null) ){
         if(preset.readFont == null) preset.readFont = "";
         if(preset.codeFont == null) preset.codeFont = "";
@@ -1454,9 +1476,12 @@ var BarcodeDrawer = (function () {
   function init(preset) {
     // When any of these barcodes is at
     // its nominal or 100% size the width
-    // of the narrowest bar or space is
-    // 0.33 mm
-    scale = 0.33; // 0.33 == 100% // 0.264 == 80% // 0.31 Penguin
+    // of the narrowest bar or space is 0.33 mm
+    // scale = 0.33; // == 100%
+    var xDimensionPercent = 0.0033;
+    
+    // scale 0.33 == 100% // 0.264 == 80% // 0.31 Penguin
+    scale = xDimensionPercent*preset.scalePercent;
     heightAdjustPercent = preset.heightPercent;
     vOffset = 5;
     if(preset.humanReadable) {
