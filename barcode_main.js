@@ -331,7 +331,14 @@ function getItemsByLabel(DocPageSpread, myLabel){
 }
 
 function getMaxBounds( pageElementArray ){
+  
+  if(pageElementArray.length == 0) {
+    alert("getMaxBounds received empty array :(");
+    return [0,0,0,0];
+  }
+
   var maxBounds = pageElementArray[0].visibleBounds; //array [y1, x1, y2, x2], [top, left, bottom, right]
+  if(pageElementArray.length == 1) return maxBounds;
   for(var i=1;i<pageElementArray.length;i++){
     switch (pageElementArray[i].constructor.name){
       case "Rectangle":
@@ -361,13 +368,11 @@ function calcOffset(itemBounds, page, preset){
   var pb = getBoundsInfo(page.bounds);
 
   if(preset.alignTo == "barcode_box"){
-    preset.selectionBounds = preset.barcode_box.visibleBounds;
     // Now lets add it to the offsets
     preset.offset.x += preset.selectionBounds[1];
     preset.offset.y += preset.selectionBounds[0];
     pb = getBoundsInfo(preset.selectionBounds);
   } else if(preset.alignTo == "Selection"){
-    preset.selectionBounds = getMaxBounds( app.selection );
     // Now lets add it to the offsets
     preset.offset.x += preset.selectionBounds[1];
     preset.offset.y += preset.selectionBounds[0];
@@ -1172,7 +1177,7 @@ function showDialog(presets, preset) {
       setRuler(preset.doc, originalRulers);
     } else if( preset.alignTo == "Selection" ) {
       var originalRulers = setRuler(preset.doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
-      preset.selectionBounds = app.selection[0].visibleBounds;
+      preset.selectionBounds = getMaxBounds( app.selection );
       setRuler(preset.doc, originalRulers);
     } else {
       preset.selectionBounds = [0,0,0,0];
@@ -1309,14 +1314,15 @@ var BarcodeDrawer = (function () {
   }
 
   function outline(preset, textBox){
-    if(preset.createOulines) {
+    // returns array of page elements
+    if(preset.createOulines && textBox.constructor.name == "TextFrame") {
       try{
-        element = textBox.createOutlines();
-        return element;
+        var elements = textBox.createOutlines();
       } catch (err) {
         alert("Could not create outlines\n" + err.description);
         preset.createOulines = false; // Don't show this message again :)
       }
+      return elements;
     }
     return [textBox];
   }
@@ -1564,12 +1570,12 @@ var BarcodeDrawer = (function () {
     if(preset.qZoneIndicator) {
       var textBox = drawChar(preset, hpos, '>', preset.codeFont, preset.codeFontSize, true); //quiet zone indicator '>'
       var elements = outline(preset, textBox);
-      var elementBounds = getMaxBounds( elements );
+      var elementsBounds = getMaxBounds( elements );
 
-      if(scale != 0 && elementBounds[3] != 0) {
-        elementBounds[3] /= scale;
+      if(scale != 0 && elementsBounds[3] != 0) {
+        elementsBounds[3] /= scale;
       }
-      var humanReadableWidth = elementBounds[3] - startingpos;
+      var humanReadableWidth = elementsBounds[3] - startingpos;
     } else {
       var humanReadableWidth = hpos - startingpos;
     }
@@ -1613,8 +1619,7 @@ var BarcodeDrawer = (function () {
 
 function main(presets){
   if (typeof presets == 'undefined' || presets.length <= 0) {
-    alert("Oops!\nDid not receive any presets.");
-    return;
+    presets = getStandardSettings();
   }
   var newSetting = showDialog(presets, presets[0]);
   if (newSetting) {
@@ -1630,7 +1635,11 @@ function main(presets){
 }
 
 try {
-  main(getStandardSettings());  
+  if (parseFloat(app.version) < 6) {
+    main();
+  } else {
+    app.doScript(main, ScriptLanguage.JAVASCRIPT, undefined, UndoModes.ENTIRE_SCRIPT, "Expand State Abbreviations");
+  }
 } catch ( error ) {
   alert("Oops!\nHaving trouble creating a quality barcode: " + "Line " + error.line + ": " + error);
 }
