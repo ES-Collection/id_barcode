@@ -39,7 +39,7 @@ Array.prototype.findID = function (str) {
 
 //FontSelect makes a font selection gui widget, and returns an object
 //with the single method getFont, which can be called to get the selected font
-function FontSelect(group, font) {
+function FontSelect(group, font, resetPresetDropdown) {
   var fontFamily = "";
   var fontStyle  = "";
   
@@ -75,6 +75,11 @@ function FontSelect(group, font) {
     }
     fontStyleId = sysFontAvailableStyles.findID(fontStyle);
     availableStyles.selection = fontStyleId;
+    resetPresetDropdown();
+  } 
+
+  availableStyles.onChange = function () {
+    resetPresetDropdown();
   }
 
   availableFonts.selection = fontFamilyId;
