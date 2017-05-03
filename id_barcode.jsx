@@ -1663,6 +1663,10 @@ var jaxon = function(filePath, standardPresets, templatePreset, presetLockChar){
             var presets = self.presets;
         }
 
+        for (var p in presets) {
+            presets[p] = self.updatePreset(presets[p], []);
+        }
+
         self.presets = presets;
         return self.presets;
     }
@@ -2176,62 +2180,56 @@ if (typeof JSON !== "object") {
 
 $.localize = true; // enable ExtendScript localisation engine
 
-var version = '0.1';
-
-var platform = File.fs;
-if(platform == 'Windows'){
-    var trailSlash = "\\";
-} else if(platform == "Macintosh") {
-    var trailSlash = "/";
-} else {
-    var trailSlash = undefined;
-    throw( "Unsupported platform: "  + platform );
-}
+var version = '0.2';
 
 function newPreset(){
-  return { name              : "[ New Preset ]",
-           version           : version,
-           doc               : undefined,
-           pageIndex         : -1,
-           ean               : "",
-           addon             : "",
-           codeFont          : "OCR B Std\tRegular",
-           readFont          : "OCR B Std\tRegular", // Setting tracking to -100 is nice for this font
-           readFontTracking  : 0,
-           whiteBox          : true,
-           humanReadable     : true,
-           alignTo           : "Page Margins",
-           selectionBounds   : [0,0,0,0],
-           refPoint          : "BOTTOM_RIGHT_ANCHOR",
-           offset            : { x : 0, y : 0 },
-           humanReadableStr  : "",
-           createOulines     : true,
-           heightPercent     : 100,
-           qZoneIndicator    : true };
+  return { name               : "[ New Preset ]",
+           version            : version,
+           doc                : undefined,
+           pageIndex          : -1,
+           ean                : "",
+           addon              : "",
+           codeFont           : "OCR B Std\tRegular",
+           readFont           : "OCR B Std\tRegular", // Setting tracking to -100 is nice for this font
+           readFontTracking   : 0,
+           whiteBox           : true,
+           humanReadable      : true,
+           alignTo            : "Page Margins",
+           selectionBounds    : [0,0,0,0],
+           refPoint           : "BOTTOM_RIGHT_ANCHOR",
+           offset             : { x : 0, y : 0 },
+           humanReadableStr   : "",
+           createOulines      : true,
+           heightPercent      : 100,
+           scalePercent       : 80,
+           qZoneIndicator     : true,
+           addQuietZoneMargin : 0 };
 }
 
 var stdSettings = [newPreset(),
-                   { name              : "[ Last Used ]",  // My personal preference :)
-                     version           : version,
-                     doc               : undefined,
-                     pageIndex         : -1,
-                     ean               : "",
-                     addon             : "",
-                     readFont          : "OCR B Std\tRegular", // Setting tracking to -100 is nice for this font
-                     codeFont          : "OCR B Std\tRegular",
-                     readFontTracking  : 0,
-                     whiteBox          : true,
-                     humanReadable     : true,
-                     alignTo           : "Page",
-                     selectionBounds   : [0,0,0,0],
-                     refPoint          : "CENTER_ANCHOR",
-                     offset            : { x : 0, y : 0 },
-                     humanReadableStr  : "",
-                     createOulines     : true,
-                     heightPercent     : 60,
-                     qZoneIndicator    : false }];
+                   { name               : "[ Last Used ]",  // My personal preference :)
+                     version            : version,
+                     doc                : undefined,
+                     pageIndex          : -1,
+                     ean                : "",
+                     addon              : "",
+                     readFont           : "OCR B Std\tRegular", // Setting tracking to -100 is nice for this font
+                     codeFont           : "OCR B Std\tRegular",
+                     readFontTracking   : 0,
+                     whiteBox           : true,
+                     humanReadable      : true,
+                     alignTo            : "Page",
+                     selectionBounds    : [0,0,0,0],
+                     refPoint           : "CENTER_ANCHOR",
+                     offset             : { x : 0, y : 0 },
+                     humanReadableStr   : "",
+                     createOulines      : true,
+                     heightPercent      : 60,
+                     scalePercent       : 100,
+                     qZoneIndicator     : false,
+                     addQuietZoneMargin : 0 }];
 
-var presetsFilePath = Folder.userData + trailSlash + "EAN13_barcode_Settings.json";
+var presetsFilePath = Folder.userData + "/EAN13_barcode_Settings.json";
 
 // Start preset manager
 var Jaxon = new jaxon(presetsFilePath, stdSettings, stdSettings[0], '[');
@@ -2506,7 +2504,14 @@ function getItemsByLabel(DocPageSpread, myLabel){
 }
 
 function getMaxBounds( pageElementArray ){
+  
+  if(pageElementArray.length == 0) {
+    alert("getMaxBounds received empty array :(");
+    return [0,0,0,0];
+  }
+
   var maxBounds = pageElementArray[0].visibleBounds; //array [y1, x1, y2, x2], [top, left, bottom, right]
+  if(pageElementArray.length == 1) return maxBounds;
   for(var i=1;i<pageElementArray.length;i++){
     switch (pageElementArray[i].constructor.name){
       case "Rectangle":
@@ -2536,13 +2541,11 @@ function calcOffset(itemBounds, page, preset){
   var pb = getBoundsInfo(page.bounds);
 
   if(preset.alignTo == "barcode_box"){
-    preset.selectionBounds = preset.barcode_box.visibleBounds;
     // Now lets add it to the offsets
     preset.offset.x += preset.selectionBounds[1];
     preset.offset.y += preset.selectionBounds[0];
     pb = getBoundsInfo(preset.selectionBounds);
   } else if(preset.alignTo == "Selection"){
-    preset.selectionBounds = getMaxBounds( app.selection );
     // Now lets add it to the offsets
     preset.offset.x += preset.selectionBounds[1];
     preset.offset.y += preset.selectionBounds[0];
@@ -2941,8 +2944,7 @@ function showDialog(presets, preset) {
   var codeFontRow = fontPanel.add('group');
   var codeFontSelect = FontSelect(codeFontRow, preset.codeFont);
   
-  var HR = fontPanel.add ("checkbox", undefined, "Add human-readable");
-      HR.value = preset.humanReadable;
+  fontPanel.add('statictext', undefined, 'Human-readable');
   var readFontRow = fontPanel.add('group');
   var readFontSelect = FontSelect(readFontRow, preset.readFont);
 
@@ -3056,12 +3058,22 @@ function showDialog(presets, preset) {
   heightPercentInput.characters = 4;
   heightPercentInput.onChanging = function () { heightPercentInput.text = String(parseFloat(heightPercentInput.text)) };
   heightAdjust.add('statictext', undefined, '%');
-
+  
+  var scaleAdjust = adjustPanel.add('group');
+  scaleAdjust.add('statictext', undefined, 'Scale:');
+  var scalePercentInput = scaleAdjust.add('edittext', undefined, preset.scalePercent);
+  scalePercentInput.characters = 4;
+  scalePercentInput.onChanging = function () { scalePercentInput.text = String(scalePercentInput.text); };
+  scaleAdjust.add('statictext', undefined, '%');
+  
   var whiteBG = adjustPanel.add ("checkbox", undefined, "White background");
       whiteBG.value = preset.whiteBox || false;
 
   var quietZoneIndicator = adjustPanel.add ("checkbox", undefined, "Quiet Zone Indicator");
       quietZoneIndicator.value = preset.qZoneIndicator || false;
+
+  var HR = adjustPanel.add ("checkbox", undefined, "Human-readable");
+      HR.value = preset.humanReadable;
 
   //////////////////////////
   // END Adjustment panel //
@@ -3232,6 +3244,7 @@ function showDialog(presets, preset) {
     preset.ean            = eanInput.text.replace(/[^0-9X\-]/gi, ''); // Preserve human readable
     preset.addon          = addonText.text.replace(/[^\d]+/g, '');
     // Get Custom Settings
+    preset.scalePercent   = scalePercentInput.text.replace(/[^\d]+/g, '');
     preset.heightPercent  = heightPercentInput.text.replace(/[^\d]+/g, '');
     preset.whiteBox       = whiteBG.value;
     preset.qZoneIndicator = quietZoneIndicator.value;
@@ -3256,6 +3269,7 @@ function showDialog(presets, preset) {
         addonText.text            = p.addon;
       }
       // Set Custom Settings
+      scalePercentInput.text    = p.scalePercent;
       heightPercentInput.text   = p.heightPercent;
       whiteBG.value             = p.whiteBox;
       HR.value                  = p.humanReadable;
@@ -3276,6 +3290,8 @@ function showDialog(presets, preset) {
     updatePreset();
     var pureEAN = preset.ean.replace(/[^\dXx]+/g, '');
 
+    // Check EAN
+    //----------
     if( pureEAN.length == 0 ) {
       alert("Please enter a valid EAN code.\n");
       return showDialog(presets, preset); // Restart
@@ -3311,6 +3327,15 @@ function showDialog(presets, preset) {
       return showDialog(presets, preset); // Restart
     }
     
+    // Check Scale Percent
+    //--------------------
+    if(preset.scalePercent > 200 || preset.scalePercent < 80 ) {
+      alert("Scale is outside target range.\nThe target size is 100% but the standards allow a range between 80% and 200%." );
+      return showDialog(presets, preset); // Restart
+    }
+
+    // Check Fonts
+    //------------
     if( (preset.readFont == null) || (preset.codeFont == null) ){
         if(preset.readFont == null) preset.readFont = "";
         if(preset.codeFont == null) preset.codeFont = "";
@@ -3325,7 +3350,7 @@ function showDialog(presets, preset) {
       setRuler(preset.doc, originalRulers);
     } else if( preset.alignTo == "Selection" ) {
       var originalRulers = setRuler(preset.doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
-      preset.selectionBounds = app.selection[0].visibleBounds;
+      preset.selectionBounds = getMaxBounds( app.selection );
       setRuler(preset.doc, originalRulers);
     } else {
       preset.selectionBounds = [0,0,0,0];
@@ -3462,14 +3487,15 @@ var BarcodeDrawer = (function () {
   }
 
   function outline(preset, textBox){
-    if(preset.createOulines) {
+    // returns array of page elements
+    if(preset.createOulines && textBox.constructor.name == "TextFrame") {
       try{
-        element = textBox.createOutlines();
-        return element;
+        var elements = textBox.createOutlines();
       } catch (err) {
         alert("Could not create outlines\n" + err.description);
         preset.createOulines = false; // Don't show this message again :)
       }
+      return elements;
     }
     return [textBox];
   }
@@ -3614,14 +3640,14 @@ var BarcodeDrawer = (function () {
   }
 
   function savePresets() {
-    var savePresetBox = drawBox(hpos - 10, 0, width, height+12+vOffset, 'None');
+    var savePresetBox = drawBox(hpos - startX, 0, width, height+12+vOffset, 'None');
         savePresetBox.label = String(presetString);
         savePresetBox.name  = "Barcode_Settings";
     return savePresetBox;
   }
 
   function drawWhiteBox() {
-    var whiteBox = drawBox(hpos - 10, 0, width, height+12+vOffset, bgSwatchName);
+    var whiteBox = drawBox(hpos - startX, 0, width, height+12+vOffset, bgSwatchName);
     whiteBox.label = "barcode_whiteBox";
     return whiteBox;
   }
@@ -3629,9 +3655,12 @@ var BarcodeDrawer = (function () {
   function init(preset) {
     // When any of these barcodes is at
     // its nominal or 100% size the width
-    // of the narrowest bar or space is
-    // 0.33 mm
-    scale = 0.33; // 0.33 == 100% // 0.264 == 80% // 0.31 Penguin
+    // of the narrowest bar or space is 0.33 mm
+    // scale = 0.33; // == 100%
+    var xDimensionPercent = 0.0033;
+    
+    // scale 0.33 == 100% // 0.264 == 80% // 0.31 Penguin
+    scale = xDimensionPercent*preset.scalePercent;
     heightAdjustPercent = preset.heightPercent;
     vOffset = 5;
     if(preset.humanReadable) {
@@ -3655,7 +3684,10 @@ var BarcodeDrawer = (function () {
     // Gain control: Dependent on paper properties and dot distribution. Best to leave to CtP process.
     reduce = 0; // 10% dotgain == 0.1
     
-    hpos = 10;
+    startX = 10 + preset.addQuietZoneMargin;
+    hpos = startX+0;
+    width += (preset.addQuietZoneMargin*2);
+
     presetString = Jaxon.presetString( Jaxon.updatePreset(preset, ['name']) );
   }
 
@@ -3711,12 +3743,12 @@ var BarcodeDrawer = (function () {
     if(preset.qZoneIndicator) {
       var textBox = drawChar(preset, hpos, '>', preset.codeFont, preset.codeFontSize, true); //quiet zone indicator '>'
       var elements = outline(preset, textBox);
-      var elementBounds = getMaxBounds( elements );
+      var elementsBounds = getMaxBounds( elements );
 
-      if(scale != 0 && elementBounds[3] != 0) {
-        elementBounds[3] /= scale;
+      if(scale != 0 && elementsBounds[3] != 0) {
+        elementsBounds[3] /= scale;
       }
-      var humanReadableWidth = elementBounds[3] - startingpos;
+      var humanReadableWidth = elementsBounds[3] - startingpos;
     } else {
       var humanReadableWidth = hpos - startingpos;
     }
@@ -3760,8 +3792,7 @@ var BarcodeDrawer = (function () {
 
 function main(presets){
   if (typeof presets == 'undefined' || presets.length <= 0) {
-    alert("Oops!\nDid not receive any presets.");
-    return;
+    presets = getStandardSettings();
   }
   var newSetting = showDialog(presets, presets[0]);
   if (newSetting) {
@@ -3777,7 +3808,11 @@ function main(presets){
 }
 
 try {
-  main(getStandardSettings());  
+  if (parseFloat(app.version) < 6) {
+    main();
+  } else {
+    app.doScript(main, ScriptLanguage.JAVASCRIPT, undefined, UndoModes.ENTIRE_SCRIPT, "Expand State Abbreviations");
+  }
 } catch ( error ) {
   alert("Oops!\nHaving trouble creating a quality barcode: " + "Line " + error.line + ": " + error);
 }
