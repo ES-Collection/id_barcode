@@ -430,4 +430,7 @@ idUtil.calcOffset = function (itemBounds, page, preset){
   // Add UI bound offset
   ib.bounds = addToBounds(ib.bounds, preset.offset.x, preset.offset.y);
   return ib.bounds;
-}
+};
+
+// END id_Util.js
+

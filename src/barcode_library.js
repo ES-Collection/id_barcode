@@ -322,3 +322,6 @@ var bar_widths = {
     [1, 1, 1, 0, 1, 0, 0]
   ]
 };
+
+// END barcode_library.js
+

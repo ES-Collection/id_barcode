@@ -1,4 +1,5 @@
-﻿var BarcodeDrawer = (function () {
+﻿// Start BarcodeDrawer
+var BarcodeDrawer = (function () {
   var doc;
   var originalRulers;
   var page;
@@ -272,7 +273,7 @@
 
   function savePresets() {
     var savePresetBox = drawBox(hpos - startX, 0, width, height+12+vOffset, 'None');
-        savePresetBox.label = String(presetString);
+        savePresetBox.label = presetString;
         savePresetBox.name  = "Barcode_Settings";
     return savePresetBox;
   }
@@ -283,7 +284,7 @@
     return whiteBox;
   }
 
-  function init(preset) {
+  function init( preset ) {
     // When any of these barcodes is at
     // its nominal or 100% size the width
     // of the narrowest bar or space is 0.33 mm
@@ -319,7 +320,7 @@
     hpos = startX+0;
     width += (preset.addQuietZoneMargin*2);
 
-    presetString = PresetsController.presetString( PresetsController.updatePreset(preset, ['name']) );
+    var presetString = JSON.stringify( preset );
   }
 
   function getSize(){
@@ -327,7 +328,7 @@
     return {  width : width * scale, height : _height * scale };
   }
 
-  function drawBarcode(preset) {
+  function drawBarcode( preset ) {
     var barcode = Barcode().init(preset);
     var barWidths = barcode.getNormalisedWidths();
     var addonWidths = barcode.getNormalisedAddon();
@@ -419,4 +420,7 @@
   return {
     drawBarcode: drawBarcode
   }
-})();
+})(); 
+
+// END barcode_drawer.js
+

@@ -1122,5 +1122,5 @@ ISBN.isbn.prototype = {
   }
 };
 
-
+// END isbn.js
 
