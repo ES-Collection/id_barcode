@@ -1,6 +1,22 @@
-// Many parts of this code borrowed from IndiSnip
-// http://indisnip.wordpress.com/2010/08/24/findchange-missing-font-with-scripting/
+/* 
 
+  esfm.js
+
+  ExtendScript Font Manager
+  
+  Many parts of this code borrowed from IndiSnip
+  http://indisnip.wordpress.com/2010/08/24/findchange-missing-font-with-scripting/
+
+*/
+
+
+var fontManager = function() {
+    // ref to self
+    var Esfm = this;
+    // TO COME...
+    // I would like to be able to save outlines
+    // so we can draw barcodes when fonts are not loaded
+}
 
 //get unique Array elements
 Array.prototype.unique = function () {
@@ -39,7 +55,7 @@ Array.prototype.findID = function (str) {
 
 //FontSelect makes a font selection gui widget, and returns an object
 //with the single method getFont, which can be called to get the selected font
-function FontSelect(group, font) {
+function FontSelect(group, font, resetPresetDropdown) {
   var fontFamily = "";
   var fontStyle  = "";
   
@@ -75,6 +91,11 @@ function FontSelect(group, font) {
     }
     fontStyleId = sysFontAvailableStyles.findID(fontStyle);
     availableStyles.selection = fontStyleId;
+    resetPresetDropdown();
+  } 
+
+  availableStyles.onChange = function () {
+    resetPresetDropdown();
   }
 
   availableFonts.selection = fontFamilyId;
@@ -105,4 +126,8 @@ function FontSelect(group, font) {
     }
   };
 }
+
+
+// END esfm.js
+
 

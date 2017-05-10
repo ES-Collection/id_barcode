@@ -1,434 +1,1663 @@
-﻿function log(text) {
-  $.writeln(text);
-}
+﻿/*
 
-var checkCheckDigit = function(str) {
-    // Check ISBN as found here:
-    // http://stackoverflow.com/questions/11104439/how-do-i-check-if-an-input-contains-an-isbn-using-javascript/
+    +-+-+ +-+-+-+-+-+-+-+
+    |I|d| |B|a|r|c|o|d|e|
+    +-+-+ +-+-+-+-+-+-+-+
+    An InDesign script for creating EAN-13 barcodes
 
-    var str = String(str).replace(/[^0-9X]/gi, '');
-
-    var len,
-        sum,
-        weight,
-        digit,
-        check,
-        i;
-
-    if (str.length == 13) {
-        // ISBN-13 or padded ISSN
-        len = str.length-1;
-        sum = 0;
-        for (i = 0; i < len; i++) {
-            digit = parseInt(str[i]);
-            if (i % 2 == 1) {
-                sum += 3*digit;
-            } else {
-                sum += digit;
-            }
-        }
-        check = (10 - (sum % 10)) % 10;
-        if (check == 10) {
-            check = 'X';
-        }
-        return (check == str[str.length-1].toUpperCase());
-    }
+    https://github.com/GitBruno/id_barcode
     
-    if (str.length == 10 || str.length == 8) {
-        // ISBN-10 or unpadded ISSN
-        len = str.length-1;
-        weight = str.length;
-        sum = 0;
-        for (i = 0; i < len; i++) {
-          digit = parseInt(str[i]);
-          sum += (weight - i) * digit;
-        }
+    Copyright (c) 2016 - 2017 Bruno Herfst, http://brunoherfst.com
+    Copyright (c) 2011 Nick Morgan, http://skilldrick.co.uk
 
-        check = (11 - sum % 11) % 11;
-        if (check == 10) {
-            check = 'X';
-        }
-        return (check == str[str.length-1].toUpperCase());
-    }
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
 
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
 
-      sum = (11 - sum % 11) % 11;
-      return sum === 10 ? 'X' : String(c);
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.
 
-
-    return false;
-}
-
-function calculateCheckDigit(ean) {
-  var c, n, d;
-    if (ean.match(/^\d{9}[\dX]?$/)) {
-      // ISBN-10
-      c = 0;
-      for (n = 0; n < 9; n += 1) {
-        c += (10 - n) * ean.charAt(n);
-      }
-      c = (11 - c % 11) % 11;
-      return c === 10 ? 'X' : String(c);
-
-    } else if (ean.match(/(?:978|979|977)\d{9}[\dX]?/)) {
-      // ISBN-13 ISSN-13
-      c = 0;
-      for (n = 0; n < 12; n += 2) {
-        c += Number(ean.charAt(n)) + 3 * ean.charAt(n + 1);
-      }
-
-      //return String((10 - c % 10) % 10);
-      c = (10 - c % 10) % 10;
-      return c === 10 ? 'X' : String(c);
-    
-    } else if (ean.match(/^\d{7}[\dX]?$/)) {
-      //ISSN-8
-      /* Wrongly stated on http://www.issn.org/understanding-the-issn/issn-uses/identification-with-the-ean-13-barcode/
-      c = 0;
-      for (n = 0; n < 7; n++) {
-        d = Number(ean.charAt(n));
-        if (i % 2 == 1) {
-            // odd
-            c += 3*d;
-        } else {
-            // even
-            c += d;
-        }
-      }
-      c = 10 - (c % 10);
-      return c === 10 ? 'X' : String(c);
-      */
-      // Wikipedia is right for a change: https://en.wikipedia.org/wiki/International_Standard_Serial_Number
-      c = 0;
-      for (n = 0; n < 7; n += 1) {
-        c += (8 - n) * ean.charAt(n);
-      }
-      c = (11 - c % 11) % 11;
-      return c === 10 ? 'X' : String(c);
-
-    }
-
-    return null;
-}
-
-var Barcode = function () {
-  var barcode_string;
-  var addon_string;
-  var stripped;
-
-  function getNorm(bars) {
-    var curr = bars[0];
-    var counter = 1;
-    var norm = [];
-    for (var i = 1; i < bars.length; i++) {
-      if (curr !== bars[i]) {
-        norm.push(counter);
-        counter = 1;
-        curr = bars[i];
-      }
-      else {
-        counter++;
-      }
-    }
-    norm.push(counter);
-    return norm;
-  }
-
-  function stripAddon(str) {
-    return str.replace(/[^\d]+/g, '');
-  }
-  function stripEAN(str) {
-    return str.replace(/[^0-9X]/gi, '');
-  }
-
-  return {
-    init: function (preset) {
-      var eanStr   = String(preset.ean);
-      var addonStr = String(preset.addon);
-      
-      if (eanStr) {
-        barcode_string = eanStr;
-        stripped = stripEAN(barcode_string);
-        if ( !checkCheckDigit(stripped) ) {
-          throw "Check digit incorrect";
-        }
-      }
-
-      if (addonStr) {
-        addon_string = stripAddon(addonStr);
-        if(addon_string.length > 5) {
-        	throw "Addon should be 5 digits or less.\nLength is: " + addon_string.length;
-        }
-      }
-
-      return this;
-    },
-
-    getStripped: function () {
-      return stripped;
-    },
-	
-    getBarWidths: function () {
-      var barWidths = [];
-      for (var i = 1; i < stripped.length; i++) { //don't include first number of barcode
-        var encoding = pattern[i - 1];
-        var thisBarWidth = bar_widths[encoding][stripped[i]];
-        barWidths.push(thisBarWidth);
-      }
-      return barWidths;
-    },
-
-    getNormalisedWidths: function () {
-      var barWidths = this.getBarWidths();
-      var normalisedWidths = [];
-      var current = [];
-      for (var i = 0; i < barWidths.length; i++) {
-        current = [];
-        if (barWidths[i][0] === 0) {
-          current.push([0, 1, 0, 1]);
-        }
-        else {
-          current.push([1, 0, 1, 0]);
-        }
-        var norm = getNorm(barWidths[i]);
-        current.push(norm);
-        current.push(stripped[i+1]); //add ean digit
-        normalisedWidths.push(current);
-      }
-      return normalisedWidths;
-
-    },
-
-    getAddonWidths: function () {
-      if (! addon_string) {
-        return false;
-      }
-      else {
-        var checksum = this.getAddonChecksum();
-        var pattern = addon_pattern[checksum];
-        var widths = [];
-        for (var i = 0; i < addon_string.length; i++) {
-          //separators:
-          if (i === 0) {
-            widths.push([0, 1, 0, 1, 1]);
-          }
-          else {
-            widths.push([0, 1]);
-          }
-          var encoding = pattern[i];
-          widths.push(bar_widths[encoding][addon_string[i]]);
-        }
-        return widths;
-      }
-    },
-
-    getNormalisedAddon: function () {
-      var addonWidths = this.getAddonWidths();
-      if (! addonWidths) {
-        return false;
-      }
-      var normalisedAddon = [];
-      var current = [];
-      for (var i = 0; i < addonWidths.length; i++) {
-        current = [];
-        if (addonWidths[i].length == 2) {
-          current.push([0, 1])
-        }
-        else {
-          current.push([0, 1, 0, 1]);
-        }
-        current.push(getNorm(addonWidths[i]));
-        if (i % 2 == 1) {
-          current.push(addon_string[Math.floor(i / 2)]);
-        }
-        normalisedAddon.push(current);
-      }
-
-      return normalisedAddon;
-    },
-
-    getAddonChecksum: function () {
-      var total = 0;
-      for (var i = 0; i < addon_string.length; i++) {
-        if (i % 2 === 0) {
-          total += addon_string[i] * 3;
-        }
-        else {
-          total += addon_string[i] * 9;
-        }
-      }
-      return total % 10;
-    }
-
-  }
-};
-
-/*
-*
-* http://en.wikipedia.org/wiki/European_Article_Number
-*
 */
 
-var pattern = ['L', 'G', 'G', 'L', 'G', 'L', 'R', 'R', 'R', 'R', 'R', 'R'];
+#targetengine 'EAN13_Barcode_Creator';
 
-var addon_pattern = [
-  ['G', 'G', 'L', 'L', 'L'],
-  ['G', 'L', 'G', 'L', 'L'],
-  ['G', 'L', 'L', 'G', 'L'],
-  ['G', 'L', 'L', 'L', 'G'],
-  ['L', 'G', 'G', 'L', 'L'],
-  ['L', 'L', 'G', 'G', 'L'],
-  ['L', 'L', 'L', 'G', 'G'],
-  ['L', 'G', 'L', 'G', 'L'],
-  ['L', 'G', 'L', 'L', 'G'],
-  ['L', 'L', 'G', 'L', 'G']
-];
+$.localize = true; // enable ExtendScript localisation engine
 
-var bar_widths = {
-  L: [
-    [0, 0, 0, 1, 1, 0, 1],
-    [0, 0, 1, 1, 0, 0, 1],
-    [0, 0, 1, 0, 0, 1, 1],
-    [0, 1, 1, 1, 1, 0, 1],
-    [0, 1, 0, 0, 0, 1, 1],
-    [0, 1, 1, 0, 0, 0, 1],
-    [0, 1, 0, 1, 1, 1, 1],
-    [0, 1, 1, 1, 0, 1, 1],
-    [0, 1, 1, 0, 1, 1, 1],
-    [0, 0, 0, 1, 0, 1, 1]
-  ],
-  G: [
-    [0, 1, 0, 0, 1, 1, 1],
-    [0, 1, 1, 0, 0, 1, 1],
-    [0, 0, 1, 1, 0, 1, 1],
-    [0, 1, 0, 0, 0, 0, 1],
-    [0, 0, 1, 1, 1, 0, 1],
-    [0, 1, 1, 1, 0, 0, 1],
-    [0, 0, 0, 0, 1, 0, 1],
-    [0, 0, 1, 0, 0, 0, 1],
-    [0, 0, 0, 1, 0, 0, 1],
-    [0, 0, 1, 0, 1, 1, 1]
-  ],
-  R: [
-    [1, 1, 1, 0, 0, 1, 0],
-    [1, 1, 0, 0, 1, 1, 0],
-    [1, 1, 0, 1, 1, 0, 0],
-    [1, 0, 0, 0, 0, 1, 0],
-    [1, 0, 1, 1, 1, 0, 0],
-    [1, 0, 0, 1, 1, 1, 0],
-    [1, 0, 1, 0, 0, 0, 0],
-    [1, 0, 0, 0, 1, 0, 0],
-    [1, 0, 0, 1, 0, 0, 0],
-    [1, 1, 1, 0, 1, 0, 0]
-  ]
-};
-// Many parts of this code borrowed from IndiSnip
-// http://indisnip.wordpress.com/2010/08/24/findchange-missing-font-with-scripting/
+var version = 0.4;
+var debug   = false;
+
+// Template preset
+var standardPreset = { name               : "Standard",
+                       version            : version,
+                       pageIndex          : -1,
+                       ean                : "",
+                       addon              : "",
+                       codeFont           : "OCR B Std\tRegular",
+                       readFont           : "OCR B Std\tRegular", // Setting tracking to -100 is nice for this font
+                       readFontTracking   : 0,
+                       whiteBox           : true,
+                       humanReadable      : true,
+                       alignTo            : "Page Margins",
+                       selectionBounds    : [0,0,0,0],
+                       refPoint           : "BOTTOM_RIGHT_ANCHOR",
+                       offset             : { x : 0, y : 0 },
+                       humanReadableStr   : "",
+                       createOulines      : true,
+                       heightPercent      : 100,
+                       scalePercent       : 80,
+                       qZoneIndicator     : true,
+                       addQuietZoneMargin : 0 };
+
+var standardPresets = [standardPreset];
+
+// END of barcode_header.js
+
+/*
+
+    espm.js
+
+    An array based preset manager for extendscript    
+
+    Bruno Herfst 2017
+
+    Version 1.0
+    
+    MIT license (MIT)
+    
+    https://github.com/GitBruno/ESPM
+
+*/
 
 
-//get unique Array elements
-Array.prototype.unique = function () {
-  var r = new Array();
-  o:for (var i = 0, n = this.length; i < n; i++) {
-    for (var x = 0, y = r.length; x < y; x++) {
-      if (r[x]==this[i]) {
-        continue o;
-      }
+/* -------------------------------------------------------------------------------
+    
+    @param fileName : String
+        Name of file to be saved in user data folder
+    
+    @param standardPresets : Array of Objects
+        Array of initial presets that are loaded if no presetsFile is found at filePath
+    
+    @param TemplatePreset : Object
+        A template preset to benchmark against. Also used as default.
+        If not supplied TemplatePreset is first Preset in standardPresets.
+
+------------------------------------------------------------------------------- */
+
+var presetManager = function( fileName, standardPresets, TemplatePreset ) {
+    // ref to self
+    var Espm = this;
+
+    // Create copy of standardPresets
+    var standardPresets = JSON.parse(JSON.stringify(standardPresets));
+
+    // standard file path
+    var filePath = Folder.userData + "/" + fileName;
+    
+    Espm.getPresetsFilePath = function () {
+        return filePath;
     }
-    r[r.length] = this[i];
-  }
-  return r;
+
+    /////////////////////
+    // T E M P L A T E //
+    /////////////////////
+    if ( typeof TemplatePreset !== 'object' ) {
+        // TemplatePreset is optional
+        TemplatePreset = standardPresets.shift();
+    }
+
+    var Template = ( function() { 
+        // Create a new template by calling Template.getInstance();
+        function createTemplate() {
+            var newTemplate = new Object();
+            for(var k in TemplatePreset) newTemplate[k]=TemplatePreset[k];
+            return newTemplate;
+        }
+        return {
+            getInstance: function () {
+                return createTemplate();
+            }
+        };
+    })();
+
+    ///////////////////////////////////////
+    // P R I V A T E   F U N C T I O N S //
+    ///////////////////////////////////////
+    function createMsg ( bool, comment ) {
+        // Standard return obj
+        return {success: Boolean(bool), comment: String( comment ) };
+    }
+
+    function copy_of ( something ) {
+        //clones whatever it is given via JSON conversion
+        return JSON.parse(JSON.stringify( something ));
+    }
+
+    function not_in_array ( arr, element ) {
+        for(var i=0; i<arr.length; i++) {
+            if (arr[i] == element) return false;
+        }
+        return true;
+    }
+
+    function fileExist ( filePath ) {
+        var f = File(filePath);
+        if(f.exists){
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    function writeFile ( filePath, contentString ) {
+        // This function will (over) write a file to file path
+        // filePath does not need to exist
+
+        var alertUser = true;
+
+        function error( bool, message ) {
+            if(alertUser) {
+                alert( "Preset Manager\n" + String(message) );
+            }
+            try {
+                f.close();
+            } catch ( err ) {
+                // Do nothing
+            }
+            return createMsg ( bool, message );
+        }
+
+        var f = File(filePath);
+        
+        try {
+            // Set character encoding
+            f.encoding = "UTF-16";
+            
+            // Open the file
+            if( ! f.open('w') ){
+                return error( false, "Error opening file at " + filePath +": "+ f.error );
+            }
+            // Write to file
+            if( ! f.write( String(contentString) ) ){
+                return error( false, "Error writing to file at " + filePath +": "+ f.error );
+            }
+            // Close the file
+            if( ! f.close() ){
+                return error( false, "Error closing file at " + filePath +": "+ f.error );
+            }
+        } catch ( r ) {
+            return error( false, r.error );
+        }
+
+        return createMsg ( true, "Done" );
+    }
+
+    function updateObj ( Old_Obj, New_Obj, ignoreKeys ) {
+        // This function will try and copy all values
+        // from Old_Obj to New_Obj
+        for ( var key in New_Obj ) {
+            if( Old_Obj.hasOwnProperty(key) ) {
+                if ( not_in_array( ignoreKeys, key ) ) {
+                    New_Obj[key] = Old_Obj[key];
+                }
+            }
+        }
+        return copy_of( New_Obj );
+    }
+
+    function updatePreset ( oldPreset, ignoreKeys ) {
+        var ignoreKeys = ignoreKeys || [];
+        if(! ignoreKeys instanceof Array) {
+            throw "The function updatePreset expects ignoreKeys be type of array."
+        }
+        // Create a copy of the standard preset
+        var newPreset  = Template.getInstance();
+        return updateObj( oldPreset, newPreset, ignoreKeys );
+    }
+
+
+    // P R E S E T   C O N T R O L L E R
+    //-------------------------------------------------
+
+    function presetController( Preset ) {
+        // This preset controller handles a single preset
+        // And will be attached to any preset
+        var PresetController = this;
+        // Create a fresh template
+        var _Preset = Template.getInstance();
+
+        var _hasProp = function( propName ) {
+            if( _Preset.hasOwnProperty( propName ) ){
+                return true;
+            } else {
+                alert("UiPreset does not have property " + propName);
+                return false;
+            }
+        }
+
+        // Public
+        //-------
+        presetController.getTemplate = function() {
+            return Template.getInstance();
+        }
+
+        PresetController.get = function() {
+            return copy_of( _Preset );
+        }
+
+        PresetController.load = function( Preset ) {
+            _Preset = updatePreset( Preset );
+            return _Preset;
+        }
+        
+        // Get and set preset properties
+        PresetController.getProp = function( propName ) {
+            var prop = String(propName);
+            if( _hasProp( prop ) ) {
+                return copy_of( _Preset[ prop ] );
+            }
+            alert("Could not get preset property.\nProperty " + prop + " does not exist.");
+            return undefined;
+        }
+
+        PresetController.setProp = function( propName, val ) {
+            var prop = String(propName);
+            if( _hasProp( prop ) ) {
+                _Preset[ prop ] = val;
+                return copy_of( _Preset[ prop ] );
+            }
+            alert("Could not set preset property.\nProperty " + prop + " does not exist.");
+            return undefined;
+        }
+
+        // init
+        PresetController.load( Preset );
+
+    } // End of presetController
+
+
+    // P R E S E T S   C O N T R O L L E R
+    //-------------------------------------------------
+
+    function presetsController( presets ) {
+        // The presets controller handles the presets array
+
+        var PresetsController = this;
+
+        function infuse( presets ) {
+            var holder = new Array();
+            var len = presets.length;
+            for (var i = 0; i < len; i++) {
+                holder[i] = new presetController( presets[i] );
+            }
+            return holder;
+        }
+
+        var _Presets = infuse( presets );
+
+        function clean() {
+            var holder = new Array();
+            var len = _Presets.length;
+            for (var i = 0; i < len; i++) {
+                holder[i] = _Presets[i].get();
+            }
+            return holder;
+        }
+
+        function presetExist( key, val ) {
+            var len = _Presets.length;
+            for (var i = len-1; i >= 0; i--) {
+                if (_Presets[i].getProp(key) == val) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function calcIndex( pos, len ) {
+            // Calculate actual index
+            var i = pos;
+            if ( pos < 0 ) {
+                i = len - Math.abs(pos);
+            }
+            return Math.abs(i);
+        }
+
+        function outOfRange( pos, len ) {
+            var pos = parseInt(pos);
+            var len = parseInt(len);
+            if(pos > len) {
+                return true;
+            }
+            if( pos < -1-len ) {
+                return true;
+            }
+            return false;
+        }
+
+        //------------------------------------------
+        // Public access
+
+        PresetsController.get = function () {
+            return clean();
+        }
+
+        PresetsController.getByKey = function ( key, val ) {
+            // Sample usage: Espm.Presets.getByKey('id',3);
+            // Please note that this function returns the first
+            // preset it can find
+            var len = _Presets.length;
+            for (var i = len-1; i >= 0; i--) {
+                if (_Presets[i].getProp(key) == val) {
+                   return _Presets[i].get();
+                }
+            }
+            return false;
+        }
+
+        PresetsController.getIndex = function ( key, val ) {
+            // Sample usage: Espm.Presets.getIndex('name','this');
+            // returns array with matches
+            var matches = new Array();
+            var len = _Presets.length;
+            for (var i = len-1; i >= 0; i--) {
+                if (_Presets[i].getProp(key) == val) {
+                   matches.unshift(i);
+                }
+            }
+            return matches;
+        }
+
+        PresetsController.getByIndex = function ( position ) {
+            // Sample usage: Espm.getPresetByIndex( 3 );
+            var len = _Presets.length;
+            if( outOfRange( position, len ) ) {
+                alert("Preset Manager\nThere is no preset at index " + i);
+                return false;
+            }
+            var i = calcIndex( parseInt(position), len );
+            return _Presets[i].get();
+        }
+
+        PresetsController.getPropList = function ( key ) {
+            if( !Espm.UiPreset.get().hasOwnProperty( key ) ) {
+                alert("Preset Manager\nCan't create propertylist with key " + key);
+                return [];
+            }
+            var len = _Presets.length;
+            var propList = new Array();
+            for (var i = 0; i < len; i++) {
+                propList[i] = _Presets[i].getProp(key);
+            }
+            return propList;
+        }
+
+        PresetsController.reset = function () {
+            _Presets = infuse( standardPresets );
+        }
+
+        PresetsController.load = function ( presets ) {
+            _Presets = infuse( presets );
+            return clean();
+        }
+
+        PresetsController.add = function ( preset, position ) {
+            // para position; index that can handle negative numbers
+            // that are calculated from the back -1 == last
+            var len = _Presets.length;
+            // Not a number
+            if ( isNaN(position) ) {
+                position = len;
+            }
+
+            if( outOfRange(position, len) ) {
+                position = len;
+            }
+            
+            var i = calcIndex( position, len+1 );
+            var infusedPreset = new presetController( preset );
+            _Presets.splice(i, 0, infusedPreset);
+
+            return clean();
+        }
+
+        PresetsController.addUnique = function ( Preset, key, options ) {
+            // Sample usage: Espm.Presets.addUnique( Preset, 'name' );
+            var silently = false;
+            var position = -1;
+
+            if(options && options.hasOwnProperty('position')) {
+                if( !isNaN(options.position) ) position = parseInt(options.position);
+            }
+            if(options && options.hasOwnProperty('silently')) {
+                silently = options.silently == true;
+            }
+            var exist = presetExist(key, Preset[key]);
+            
+            if(exist){
+                if(silently) {
+                    var overwrite = true;
+                } else {
+                    var overwrite = confirm("Do you want to overwrite the existing preset?");
+                }
+                if (overwrite) {
+                    PresetsController.removeWhere( key, Preset[key] );
+                } else {
+                    return false;
+                }
+            }
+
+            var newLen = _Presets.length+1;
+            PresetsController.add( Preset, position );
+
+            return _Presets.length == newLen;
+        }
+        
+        PresetsController.remove = function ( position ) {
+            var len = _Presets.length;
+            // Check for outside range
+            if( outOfRange(position, len) ) {
+                alert("Could not remove preset\nOut of range: presets length: " + len + " index to be removed: "  + position);
+                return false;
+            }
+            var i = calcIndex( parseInt(position), len );
+            _Presets.splice( i, 1 );
+            return true;
+        }
+        
+        PresetsController.overwriteIndex = function ( position, Preset ) {
+            PresetsController.remove( position );
+            PresetsController.add( Preset, position );
+            return clean();
+        }
+
+        PresetsController.removeWhere = function ( key, val ) {
+            // Sample usage: Espm.Presets.removeWhere('id',3);
+            // This function removes any preset that contains key - val match
+            // It returns true if any presets have been removed
+            var success = false;
+            var len = _Presets.length;
+            for (var i = len-1; i >= 0; i--) {
+                if (_Presets[i].getProp(key) == val) {
+                    _Presets.splice( i, 1 );
+                    success = true;
+                }
+            }
+            return success;
+        }
+
+        PresetsController.saveToDisk  = function ( ) {
+            var presetStr = JSON.stringify( clean() );
+            return writeFile(filePath, presetStr);
+        }
+
+        PresetsController.loadFromDisk  = function () {
+            if( !fileExist(filePath) ){
+                alert("Cannot load presets.\nNo preset file found at " + filePath);
+                return false;
+            }
+
+            var PresetsFile = File(filePath);
+            PresetsFile.open('r');
+            var content = PresetsFile.read();
+            PresetsFile.close();
+
+            try {
+                var NewPresets = JSON.parse(content);
+                _Presets = infuse( NewPresets );
+                return true;
+            } catch(e) {
+                alert("Error reading JSON\n" + e.description);
+                return false;
+            }
+        }
+        
+        PresetsController.removeFromDisk = function () {
+            if( fileExist(filePath) ){
+                var PresetsFile = File(filePath);
+                PresetsFile.remove();
+                return true;
+            }
+            return false;
+        }
+
+    } // End of presetsController
+
+    // W I D G E T 
+    //-------------------------------------------------
+
+    function widgetCreator( SUI_Group ) {
+
+        var WidgetCreator = this;
+        var DataPort      = { getData: undefined, renderUiPreset: undefined };
+
+        WidgetCreator.get = function () {
+            if(DataPort) {
+                return DataPort.getData();
+            } else {
+                return createMsg ( false, "No dataport defined" );
+            }
+        }
+
+        // Any preset that starts with a locking character can't be deleted by the user
+        var lockChar           = ['[',']'];
+        var ButtonText         = {save: "Save Preset", clear: "Clear Preset"};
+        var newName            = "New Preset";
+        var lastUsedName       = "Last Used";
+        var newPresetName      = "";
+        var lastUsedPresetName = "";
+
+        function updatePresetNames() {
+            newPresetName      = String(lockChar[0] + newName      + lockChar[1]);
+            lastUsedPresetName = String(lockChar[0] + lastUsedName + lockChar[1]);
+        }
+
+        // This makes it possible to update UI everytime UiPreset is changed
+        // Even when the widget is not loaded
+        var presetsDrop    = { selection: 0 };
+        var presetBut      = { text: "" };
+        var presetDropList = [];
+        var updateUI       = true;
+        var listKey        = "";
+
+        function getDropDownIndex( index, len ) {
+            var i = parseInt( index );
+            if (i == 0) {
+                return i;
+            }
+            if (i < 0) {
+                i += len;
+            }
+            if (i > len ) {
+                i = len;
+            }
+            return i;
+        }
+
+        function createDropDownList(){
+            // Check listKey and load dropDown content
+            presetDropList = Espm.Presets.getPropList( listKey );
+            // Add new (clear) preset to dropdown list
+            presetDropList.unshift( newPresetName );
+        }
+
+        WidgetCreator.activateNew = function () {
+            // This function resets the dropdown to first (New Preset)
+            updateUI = false;
+            presetsDrop.selection = 0;
+            presetBut.text = ButtonText.save;
+            updateUI = true;
+            return createMsg ( true, "Done" );
+        }
+
+        WidgetCreator.saveUiPreset = function () {
+            Espm.UiPreset.load( DataPort.getData() );
+            return createMsg ( true, "Done" );
+        }
+
+        WidgetCreator.savePreset = function ( options ) {
+            WidgetCreator.saveUiPreset();
+            
+            // Process Options
+            if(options && options.hasOwnProperty('updateProps')) {
+                for ( var i = 0; i < options.updateProps.length; i++ ) {
+                    Espm.UiPreset.setProp( options.updateProps[i].key, options.updateProps[i].value );
+                }
+            }
+        
+            var position = -1;
+            if( options && options.hasOwnProperty('position') ) {
+                position = parseInt(options.position);
+            }
+
+            Espm.UiPreset.save( position );
+            Espm.Presets.saveToDisk();
+            
+            return createMsg ( true, "Done" );
+        }
+
+        WidgetCreator.overwritePreset = function( key, val, options ) {
+            // Save SUI data
+            WidgetCreator.saveUiPreset();
+            Espm.UiPreset.setProp( key, val );
+
+            // Process Options
+            var index = -1;
+            if(options && options.hasOwnProperty('position')) {
+                index = parseInt(options.position);
+            } else {
+                index = Espm.Presets.getIndex( key, val );
+            }
+
+            Espm.Presets.addUnique( Espm.UiPreset.get(), key, {position: index, silently: true} );
+            Espm.Presets.saveToDisk();
+            return createMsg ( true, "Done" );
+        }
+
+        WidgetCreator.saveLastUsed = function() {
+            WidgetCreator.overwritePreset( listKey, lastUsedPresetName, {position: -1} );
+            return Espm.UiPreset.get();
+        }
+
+        WidgetCreator.reset = function() {
+            return createMsg( false, "Widget is not loaded.");
+        }
+
+        WidgetCreator.loadIndex = function( i ) {
+            // Load data in UiPreset
+            if( i == 0 ) {
+                Espm.UiPreset.reset();
+            } else if ( i > 0 ) {
+                // Presets don't include [New Preset]
+                Espm.UiPreset.loadIndex( i-1 );
+            } else if ( i < 0 ) {
+                // Get from back
+                Espm.UiPreset.loadIndex( i );
+            }
+            // Update SUI
+            DataPort.renderUiPreset();
+        }
+
+        WidgetCreator.attachTo = function ( SUI_Group, listKeyID, Port, Options ) {
+            var onloadIndex = 0;
+            listKey = String(listKeyID);
+
+            if(! (Port && Port.hasOwnProperty('renderData') && Port.hasOwnProperty('getData')) ) {
+                return createMsg( false, "Could not establish data port.");
+            }
+            DataPort.renderUiPreset = function () {
+                Port.renderData( Espm.UiPreset.get() );
+            }
+            DataPort.getData = Port.getData;
+
+            // Process Options
+            if(Options && Options.hasOwnProperty('onloadIndex')) {
+                onloadIndex = parseInt(Options.onloadIndex);
+            }
+            if(Options && Options.hasOwnProperty('lockChar')) {
+                if(lockChars.length == 2) {
+                    lockChar[0] = String(Options.lockChar[0]);
+                    lockChar[1] = String(Options.lockChar[1]);
+                }
+            }
+            if(Options && Options.hasOwnProperty('newPresetName')) {
+                newName = String(Options.newPresetName);
+            }
+            if(Options && Options.hasOwnProperty('lastUsedPresetName')) {
+                lastUsedName = String(Options.lastUsedPresetName);
+            }
+            if(Options && Options.hasOwnProperty('buttonTextSave')) {
+                ButtonText.save  = String(Options.buttonTextSave);
+            }
+            if(Options && Options.hasOwnProperty('buttonTextClear')) {
+                ButtonText.clear = String(Options.buttonTextClear);
+            }
+
+            function updatePresetData() {
+                // Update newPresetName
+                updatePresetNames();
+                createDropDownList( listKey );
+            }
+
+            updatePresetData();
+
+            // Attach new widget to SUI_Group
+            presetsDrop = SUI_Group.add('dropdownlist', undefined, presetDropList);
+            presetsDrop.alignment = 'fill';
+            presetsDrop.selection = getDropDownIndex( onloadIndex, presetDropList.length );
+
+            presetsDrop.onChange = function () { 
+                if(updateUI) {
+                    // Load data in UiPreset
+                    if(this.selection.index == 0) {
+                        Espm.UiPreset.reset();
+                    } else {
+                        Espm.UiPreset.loadIndex( this.selection.index-1 );
+                    }
+                    DataPort.renderUiPreset();
+                    // Update button
+                    if( this.selection.text.indexOf(lockChar[0]) == 0 ){
+                        presetBut.text = ButtonText.save;
+                    } else {
+                        presetBut.text = ButtonText.clear;
+                    }
+                }
+            }
+
+            WidgetCreator.reset = function() {
+                updateUI = false;
+                updatePresetData();
+                presetsDrop.removeAll();
+                for (var i=0, len=presetDropList.length; i<len; i++) {
+                    presetsDrop.add('item', presetDropList[i] );
+                };
+                updateUI = true;
+                presetsDrop.selection = 0;
+                return createMsg( true, "Done");
+            }
+
+            presetBut = SUI_Group.add('button', undefined, ButtonText.save);
+
+            function _addUiPresetToPresets( defaultName ) {
+                var defaultName = defaultName || "";
+                    defaultName = String( defaultName );
+
+                var presetName = prompt("Name: ", defaultName, "Save Preset");
+
+                if ( presetName != null ) {
+                    if ( presetName.indexOf(lockChar[0]) == 0 ) {
+                        alert( "You can't start a preset name with: " + lockChar[0] );
+                        // Recurse
+                        return _addUiPresetToPresets();
+                    }
+                    Espm.UiPreset.setProp( listKey, presetName );
+                    // Optional?
+                    Espm.Presets.addUnique( Espm.UiPreset.get(), listKey, {position:-1} );
+                    WidgetCreator.reset();
+                    presetsDrop.selection = presetsDrop.items.length-1;
+                }
+            }
+
+            presetBut.onClick = function () { 
+                if( this.text == ButtonText.clear ) {
+                    Espm.Presets.remove( presetsDrop.selection.index - 1 );
+                    WidgetCreator.reset();
+                } else { // Save preset
+                    Espm.UiPreset.load( DataPort.getData() );
+                    _addUiPresetToPresets();
+                }
+                Espm.Presets.saveToDisk();
+            }
+            
+            // Load selected dropdown
+            WidgetCreator.loadIndex( onloadIndex );
+            return createMsg( true, "Done");
+        }
+
+    } // End Widget
+
+    // current preset (The presets we manipulate)
+    // We need to buils these
+    Espm.Presets  = new presetsController( standardPresets );
+    
+    // create a data controller for UiPreset
+    Espm.UiPreset = new presetController( TemplatePreset );
+    
+    // create widget builder
+    Espm.Widget = new widgetCreator();
+
+    // Extend presetController UiPreset
+    Espm.UiPreset.save = function( position ) {
+        // position or index, negative numbers are calculated from the back -1 == last
+        return Espm.Presets.add( Espm.UiPreset.get(), position );
+    }
+
+    Espm.UiPreset.loadIndex = function ( index ) {
+        var len = Espm.Presets.get().length;
+        var i = Math.abs(parseInt(index));
+        if(i > len-1) {
+            alert("Preset Manager\nLoad index is not a valid preset index: " + index);
+            return createMsg ( false, "Not a valid preset index." );
+        }
+        Espm.UiPreset.load( Espm.Presets.getByIndex( i ) );
+        return createMsg ( true, "Done" );
+    }
+
+    Espm.UiPreset.reset = function ( ) {
+        Espm.UiPreset.load( Template.getInstance() );
+    }
+
+    Espm.reset = function( hard ) {
+        var hard = (hard == true);
+        if( hard ) {
+            Espm.Presets.reset();
+            Espm.Presets.saveToDisk();
+        } else {
+            Espm.Presets.loadFromDisk();
+        }
+        Espm.UiPreset.reset();
+        Espm.Widget.reset();
+    }
+
+    Espm.format = function ( preset ) {
+        return updatePreset ( preset );
+    }
+
+    //-------------------------------------------------
+    // E N D   P U B L I C   A P I
+    //-------------------------------------------------
+    
+    // I N I T
+    //---------    
+    // Save the standard presets if not allready exist
+    if(!fileExist( filePath ) ){
+        if( ! Espm.Presets.saveToDisk() ){
+            throw("Failed to start Espm\nUnable to save presets to " + filePath);
+        }
+    }
+    // Load the presets
+    Espm.Presets.loadFromDisk();
+};
+
+//----------------------------------------------------------------------------------
+
+
+//----------------------------------------------------------------------------------
+//
+// Start JSON
+//
+//----------------------------------------------------------------------------------
+//  json2.js
+//  2016-10-28
+//  Public Domain.
+//  NO WARRANTY EXPRESSED OR IMPLIED. USE AT YOUR OWN RISK.
+//  See http://github.com/douglascrockford/JSON-js/blob/master/json2.js
+
+// Create a JSON object only if one does not already exist. We create the
+// methods in a closure to avoid creating global variables.
+
+if (typeof JSON !== "object") {
+    JSON = {};
 }
 
-//search inside array
-Array.prototype.findIn = function(search){
-  var r = Array();
-  for (var i=0; i<this.length; i++) {
-    if (this[i].indexOf(search) != -1) {
-      r.push(this[i].substr(this[i].indexOf("\t") + 1, this[i].length));
+(function () {
+    "use strict";
+
+    var rx_one = /^[\],:{}\s]*$/;
+    var rx_two = /\\(?:["\\\/bfnrt]|u[0-9a-fA-F]{4})/g;
+    var rx_three = /"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g;
+    var rx_four = /(?:^|:|,)(?:\s*\[)+/g;
+    var rx_escapable = /[\\"\u0000-\u001f\u007f-\u009f\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g;
+    var rx_dangerous = /[\u0000\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g;
+
+    function f(n) {
+        // Format integers to have at least two digits.
+        return n < 10
+            ? "0" + n
+            : n;
     }
-  }
-  return r;
-};
 
-Array.prototype.findID = function (str) {
-  for (var i = 0; i < this.length; i++) {
-    if (this[i].indexOf(str) === 0) {
-      return i;
+    function this_value() {
+        return this.valueOf();
     }
-  }
-  return 0;
-};
 
+    if (typeof Date.prototype.toJSON !== "function") {
 
-//FontSelect makes a font selection gui widget, and returns an object
-//with the single method getFont, which can be called to get the selected font
-function FontSelect(group, font) {
-  var fontFamily = "";
-  var fontStyle  = "";
-  
-  function setFontName(font) {
-    if (typeof font === 'string' || font instanceof String) {
-      var splitFont = font.split('\t');
-      if(splitFont.length == 2) {
-        fontFamily = splitFont[0];
-        fontStyle = splitFont[1];
-      }
+        Date.prototype.toJSON = function () {
+
+            return isFinite(this.valueOf())
+                ? this.getUTCFullYear() + "-" +
+                        f(this.getUTCMonth() + 1) + "-" +
+                        f(this.getUTCDate()) + "T" +
+                        f(this.getUTCHours()) + ":" +
+                        f(this.getUTCMinutes()) + ":" +
+                        f(this.getUTCSeconds()) + "Z"
+                : null;
+        };
+
+        Boolean.prototype.toJSON = this_value;
+        Number.prototype.toJSON = this_value;
+        String.prototype.toJSON = this_value;
     }
-  }
 
-  setFontName(font);
+    var gap;
+    var indent;
+    var meta;
+    var rep;
 
-  var sysFonts = app.fonts.everyItem();
-  var sysFontsList = sysFonts.fontFamily.unique();
-  sysFontsList.unshift("- Select Font Family -");
 
-  var fontFamilyId = sysFontsList.findID(fontFamily);
+    function quote(string) {
 
-  var availableFonts = group.add('dropdownlist', undefined, sysFontsList);
-  var availableStyles = group.add('dropdownlist');
+// If the string contains no control characters, no quote characters, and no
+// backslash characters, then we can safely slap some quotes around it.
+// Otherwise we must also replace the offending characters with safe escape
+// sequences.
 
-  availableFonts.minimumSize = [230,25];
-  availableStyles.minimumSize = [220,25];
-  
-  availableFonts.onChange = function () {
-    availableStyles.removeAll();
-    var sysFontAvailableStyles = sysFonts.name.findIn(availableFonts.selection);
-    for (var i = 0; i < sysFontAvailableStyles.length; i++) {
-      availableStyles.add('item',sysFontAvailableStyles[i]);
+        rx_escapable.lastIndex = 0;
+        return rx_escapable.test(string)
+            ? "\"" + string.replace(rx_escapable, function (a) {
+                var c = meta[a];
+                return typeof c === "string"
+                    ? c
+                    : "\\u" + ("0000" + a.charCodeAt(0).toString(16)).slice(-4);
+            }) + "\""
+            : "\"" + string + "\"";
     }
-    fontStyleId = sysFontAvailableStyles.findID(fontStyle);
-    availableStyles.selection = fontStyleId;
-  }
 
-  availableFonts.selection = fontFamilyId;
 
-  return {
-    getFont: function () {
-      if (availableFonts.selection && availableStyles.selection) {
-        return availableFonts.selection.text + '\t' + availableStyles.selection.text;
-      }
-      else {
-        return null; //Now we know the font is not loaded
-      }
-    },
-    setFont: function(fontName){
-      setFontName(fontName);
-      fontFamilyId = sysFontsList.findID(fontFamily);
-      availableFonts.selection = fontFamilyId;
-      
-      availableStyles.removeAll();
-      
-      var sysFontAvailableStyles = sysFonts.name.findIn(availableFonts.selection);
-      for (var i = 0; i < sysFontAvailableStyles.length; i++) {
-        availableStyles.add('item',sysFontAvailableStyles[i]);
-      }
-      
-      fontStyleId = sysFontAvailableStyles.findID(fontStyle);
-      availableStyles.selection = fontStyleId;
+    function str(key, holder) {
+
+// Produce a string from holder[key].
+
+        var i;          // The loop counter.
+        var k;          // The member key.
+        var v;          // The member value.
+        var length;
+        var mind = gap;
+        var partial;
+        var value = holder[key];
+
+// If the value has a toJSON method, call it to obtain a replacement value.
+
+        if (value && typeof value === "object" &&
+                typeof value.toJSON === "function") {
+            value = value.toJSON(key);
+        }
+
+// If we were called with a replacer function, then call the replacer to
+// obtain a replacement value.
+
+        if (typeof rep === "function") {
+            value = rep.call(holder, key, value);
+        }
+
+// What happens next depends on the value's type.
+
+        switch (typeof value) {
+        case "string":
+            return quote(value);
+
+        case "number":
+
+// JSON numbers must be finite. Encode non-finite numbers as null.
+
+            return isFinite(value)
+                ? String(value)
+                : "null";
+
+        case "boolean":
+        case "null":
+
+// If the value is a boolean or null, convert it to a string. Note:
+// typeof null does not produce "null". The case is included here in
+// the remote chance that this gets fixed someday.
+
+            return String(value);
+
+// If the type is "object", we might be dealing with an object or an array or
+// null.
+
+        case "object":
+
+// Due to a specification blunder in ECMAScript, typeof null is "object",
+// so watch out for that case.
+
+            if (!value) {
+                return "null";
+            }
+
+// Make an array to hold the partial results of stringifying this object value.
+
+            gap += indent;
+            partial = [];
+
+// Is the value an array?
+
+            if (Object.prototype.toString.apply(value) === "[object Array]") {
+
+// The value is an array. Stringify every element. Use null as a placeholder
+// for non-JSON values.
+
+                length = value.length;
+                for (i = 0; i < length; i += 1) {
+                    partial[i] = str(i, value) || "null";
+                }
+
+// Join all of the elements together, separated with commas, and wrap them in
+// brackets.
+
+                v = partial.length === 0
+                    ? "[]"
+                    : gap
+                        ? "[\n" + gap + partial.join(",\n" + gap) + "\n" + mind + "]"
+                        : "[" + partial.join(",") + "]";
+                gap = mind;
+                return v;
+            }
+
+// If the replacer is an array, use it to select the members to be stringified.
+
+            if (rep && typeof rep === "object") {
+                length = rep.length;
+                for (i = 0; i < length; i += 1) {
+                    if (typeof rep[i] === "string") {
+                        k = rep[i];
+                        v = str(k, value);
+                        if (v) {
+                            partial.push(quote(k) + (
+                                gap
+                                    ? ": "
+                                    : ":"
+                            ) + v);
+                        }
+                    }
+                }
+            } else {
+
+// Otherwise, iterate through all of the keys in the object.
+
+                for (k in value) {
+                    if (Object.prototype.hasOwnProperty.call(value, k)) {
+                        v = str(k, value);
+                        if (v) {
+                            partial.push(quote(k) + (
+                                gap
+                                    ? ": "
+                                    : ":"
+                            ) + v);
+                        }
+                    }
+                }
+            }
+
+// Join all of the member texts together, separated with commas,
+// and wrap them in braces.
+
+            v = partial.length === 0
+                ? "{}"
+                : gap
+                    ? "{\n" + gap + partial.join(",\n" + gap) + "\n" + mind + "}"
+                    : "{" + partial.join(",") + "}";
+            gap = mind;
+            return v;
+        }
     }
-  };
+
+// If the JSON object does not yet have a stringify method, give it one.
+
+    if (typeof JSON.stringify !== "function") {
+        meta = {    // table of character substitutions
+            "\b": "\\b",
+            "\t": "\\t",
+            "\n": "\\n",
+            "\f": "\\f",
+            "\r": "\\r",
+            "\"": "\\\"",
+            "\\": "\\\\"
+        };
+        JSON.stringify = function (value, replacer, space) {
+
+// The stringify method takes a value and an optional replacer, and an optional
+// space parameter, and returns a JSON text. The replacer can be a function
+// that can replace values, or an array of strings that will select the keys.
+// A default replacer method can be provided. Use of the space parameter can
+// produce text that is more easily readable.
+
+            var i;
+            gap = "";
+            indent = "";
+
+// If the space parameter is a number, make an indent string containing that
+// many spaces.
+
+            if (typeof space === "number") {
+                for (i = 0; i < space; i += 1) {
+                    indent += " ";
+                }
+
+// If the space parameter is a string, it will be used as the indent string.
+
+            } else if (typeof space === "string") {
+                indent = space;
+            }
+
+// If there is a replacer, it must be a function or an array.
+// Otherwise, throw an error.
+
+            rep = replacer;
+            if (replacer && typeof replacer !== "function" &&
+                    (typeof replacer !== "object" ||
+                    typeof replacer.length !== "number")) {
+                throw new Error("JSON.stringify");
+            }
+
+// Make a fake root object containing our value under the key of "".
+// Return the result of stringifying the value.
+
+            return str("", {"": value});
+        };
+    }
+
+
+// If the JSON object does not yet have a parse method, give it one.
+
+    if (typeof JSON.parse !== "function") {
+        JSON.parse = function (text, reviver) {
+
+// The parse method takes a text and an optional reviver function, and returns
+// a JavaScript value if the text is a valid JSON text.
+
+            var j;
+
+            function walk(holder, key) {
+
+// The walk method is used to recursively walk the resulting structure so
+// that modifications can be made.
+
+                var k;
+                var v;
+                var value = holder[key];
+                if (value && typeof value === "object") {
+                    for (k in value) {
+                        if (Object.prototype.hasOwnProperty.call(value, k)) {
+                            v = walk(value, k);
+                            if (v !== undefined) {
+                                value[k] = v;
+                            } else {
+                                delete value[k];
+                            }
+                        }
+                    }
+                }
+                return reviver.call(holder, key, value);
+            }
+
+
+// Parsing happens in four stages. In the first stage, we replace certain
+// Unicode characters with escape sequences. JavaScript handles many characters
+// incorrectly, either silently deleting them, or treating them as line endings.
+
+            text = String(text);
+            rx_dangerous.lastIndex = 0;
+            if (rx_dangerous.test(text)) {
+                text = text.replace(rx_dangerous, function (a) {
+                    return "\\u" +
+                            ("0000" + a.charCodeAt(0).toString(16)).slice(-4);
+                });
+            }
+
+// In the second stage, we run the text against regular expressions that look
+// for non-JSON patterns. We are especially concerned with "()" and "new"
+// because they can cause invocation, and "=" because it can cause mutation.
+// But just to be safe, we want to reject all unexpected forms.
+
+// We split the second stage into 4 regexp operations in order to work around
+// crippling inefficiencies in IE's and Safari's regexp engines. First we
+// replace the JSON backslash pairs with "@" (a non-JSON character). Second, we
+// replace all simple value tokens with "]" characters. Third, we delete all
+// open brackets that follow a colon or comma or that begin the text. Finally,
+// we look to see that the remaining characters are only whitespace or "]" or
+// "," or ":" or "{" or "}". If that is so, then the text is safe for eval.
+
+            if (
+                rx_one.test(
+                    text
+                        .replace(rx_two, "@")
+                        .replace(rx_three, "]")
+                        .replace(rx_four, "")
+                )
+            ) {
+
+// In the third stage we use the eval function to compile the text into a
+// JavaScript structure. The "{" operator is subject to a syntactic ambiguity
+// in JavaScript: it can begin a block or an object literal. We wrap the text
+// in parens to eliminate the ambiguity.
+
+                j = eval("(" + text + ")");
+
+// In the optional fourth stage, we recursively walk the new structure, passing
+// each name/value pair to a reviver function for possible transformation.
+
+                return (typeof reviver === "function")
+                    ? walk({"": j}, "")
+                    : j;
+            }
+
+// If the text is not JSON parseable, then a SyntaxError is thrown.
+
+            throw new SyntaxError("JSON.parse");
+        };
+    }
+}());
+
+// END espm.js
+
+
+﻿var idUtil = new Object();
+
+idUtil.getBoundsInfo = function (bounds){
+      // This functions receives bounds (y1, x1, y2, x2)
+      // and returns an object with bounds and info as below
+      var topLeftY  = bounds[0];
+      var topLeftX  = bounds[1];
+      var botRightY = bounds[2];
+      var botRightX = bounds[3];
+      var height    = Math.abs(botRightY - topLeftY);
+      var width     = Math.abs(botRightX - topLeftX);
+
+      return {    bounds    : bounds,
+                  height    : height,
+                  width     : width,
+                  topLeft   : {x: topLeftX                , y: topLeftY               } , 
+                  topCenter : {x: topLeftX + (width/2)    , y: topLeftY               } , 
+                  topRight  : {x: botRightX               , y: topLeftY               } ,
+                  midLeft   : {x: topLeftX                , y: topLeftY  + (height/2) } , 
+                  midCenter : {x: topLeftX + (width/2)    , y: topLeftY  + (height/2) } , 
+                  midRight  : {x: botRightX               , y: topLeftY  + (height/2) } , 
+                  botLeft   : {x: topLeftX                , y: botRightY              } , 
+                  botCenter : {x: topLeftX + (width/2)    , y: botRightY              } ,
+                  botRight  : {x: botRightX               , y: botRightY              } };
 }
+
+idUtil.setRuler = function (doc, myNewUnits){
+        
+    // This function sets the rulers to the disired measure units
+    // and returns the original preset that you can send back to
+    // this function to reset the rulers.
+
+    var myOldUnits = {xruler : doc.viewPreferences.horizontalMeasurementUnits, yruler: doc.viewPreferences.verticalMeasurementUnits, origin: doc.viewPreferences.rulerOrigin, zeroPoint: doc.zeroPoint };
+    
+    if (myNewUnits.hasOwnProperty('xruler') && myNewUnits.hasOwnProperty('yruler')){
+        doc.viewPreferences.horizontalMeasurementUnits = myNewUnits.xruler;
+        doc.viewPreferences.verticalMeasurementUnits   = myNewUnits.yruler;
+    } else if( myNewUnits.hasOwnProperty('units')) {
+        // Set both rulers to the sam unit
+        // We will cast everything to string so it can parse a wide variaty of input including the MeasurementUnits object
+        var stringUnits = String(myNewUnits.units).toLowerCase();
+        with(doc.viewPreferences){
+            switch(stringUnits) {
+                case "0":
+                case "millimeters":
+                case "mm":
+                case "millimeter":
+                case "zmms":
+                case "2053991795":
+                    horizontalMeasurementUnits = MeasurementUnits.MILLIMETERS;
+                    verticalMeasurementUnits   = MeasurementUnits.MILLIMETERS;
+                    break;
+                case "1":
+                case "inchesDecimal":
+                case "inch": // shorthand to decimal
+                case "zind":
+                case "2053729892":
+                    horizontalMeasurementUnits = MeasurementUnits.INCHES_DECIMAL;
+                    verticalMeasurementUnits   = MeasurementUnits.INCHES_DECIMAL;
+                    break;
+                case "inches":
+                case "zinc":
+                case "2053729891":
+                    horizontalMeasurementUnits = MeasurementUnits.MeasurementUnits.INCHES;
+                    verticalMeasurementUnits   = MeasurementUnits.MeasurementUnits.INCHES;
+                    break;
+                case "2":
+                case "points":
+                case "pt":
+                case "zpoi":
+                case "2054188905":
+                    horizontalMeasurementUnits = MeasurementUnits.POINTS;
+                    verticalMeasurementUnits   = MeasurementUnits.POINTS;
+                    break;
+                case "american_points":
+                case "apt":
+                case "zapt":
+                case "1514238068":
+                    horizontalMeasurementUnits = MeasurementUnits.AMERICAN_POINTS;
+                    verticalMeasurementUnits   = MeasurementUnits.AMERICAN_POINTS;
+                    break;
+                case "agates":
+                case "zagt":
+                case "2051106676":
+                    horizontalMeasurementUnits = MeasurementUnits.AGATES;
+                    verticalMeasurementUnits   = MeasurementUnits.AGATES;
+                    break;
+                case "bai":
+                case "zbai":
+                case "2051170665":
+                    horizontalMeasurementUnits = MeasurementUnits.BAI;
+                    verticalMeasurementUnits   = MeasurementUnits.BAI;
+                    break;
+                case "cm":
+                case "centimeter":
+                case "centimeters":
+                case "zcms":
+                case "2053336435":
+                    horizontalMeasurementUnits = MeasurementUnits.CENTIMETERS;
+                    verticalMeasurementUnits   = MeasurementUnits.CENTIMETERS;
+                    break;
+                case "ciceros":
+                case "c":
+                case "zcic":
+                case "2053335395":
+                    horizontalMeasurementUnits = MeasurementUnits.CICEROS;
+                    verticalMeasurementUnits   = MeasurementUnits.CICEROS;
+                    break;
+                case "custom":
+                case "cstm":
+                case "1131639917":
+                    horizontalMeasurementUnits = MeasurementUnits.CUSTOM;
+                    verticalMeasurementUnits   = MeasurementUnits.CUSTOM;
+                    break;
+                case "ha":
+                case "zha":
+                case "1516790048":
+                    horizontalMeasurementUnits = MeasurementUnits.HA;
+                    verticalMeasurementUnits   = MeasurementUnits.HA;
+                    break;
+                case "mils":
+                case "zmil":
+                case "2051893612":
+                    horizontalMeasurementUnits = MeasurementUnits.MILS;
+                    verticalMeasurementUnits   = MeasurementUnits.MILS;
+                    break;
+                case "picas":
+                case "p":
+                case "zpic":
+                case "2054187363":
+                    horizontalMeasurementUnits = MeasurementUnits.PICAS;
+                    verticalMeasurementUnits   = MeasurementUnits.PICAS;
+                    break;
+                case "pixels":
+                case "pixel":
+                case "px":
+                case "zpix":
+                case "2054187384":
+                    horizontalMeasurementUnits = MeasurementUnits.PIXELS;
+                    verticalMeasurementUnits   = MeasurementUnits.PIXELS;
+                    break;
+                case "q":
+                case "zque":
+                case "2054255973":
+                    horizontalMeasurementUnits = MeasurementUnits.Q;
+                    verticalMeasurementUnits   = MeasurementUnits.Q;
+                    break;
+                case "u":
+                case "zju":
+                case "2051691808":
+                    horizontalMeasurementUnits = MeasurementUnits.U;
+                    verticalMeasurementUnits   = MeasurementUnits.U;
+                    break;
+                default:
+                    alert("idUtil setRuler:\nCould not parse MeasurementUnits: " + typeof(myNewUnits) + " " + myNewUnits );
+                    break;
+            }
+        }
+    }
+    
+    if(myNewUnits.hasOwnProperty('origin')){
+        doc.viewPreferences.rulerOrigin = myNewUnits.origin;
+    } else { // Use page origin if not defined
+        doc.viewPreferences.rulerOrigin = RulerOrigin.PAGE_ORIGIN;
+    }
+    if(myNewUnits.hasOwnProperty('zeroPoint')) {
+        doc.zeroPoint = myNewUnits.zeroPoint;
+    } else { // Use zero point if not defined
+        doc.zeroPoint = [0,0];
+    }
+    return myOldUnits;
+}
+
+idUtil.find = function (haystack, needle) {
+    for (var i = 0; i < haystack.length; i++) {
+        if(haystack[i] == needle) return i;
+    }
+    return 0; // Return the first element if nothing is found
+}
+
+idUtil.getItemsByName = function (DocPageSpread, myName){
+    // This funcion returns an array of all items found with given label
+    // If nothing is found this function returns an empty array
+    var allItems = new Array();
+    if(DocPageSpread.isValid){
+        var myElements = DocPageSpread.allPageItems;
+        var len = myElements.length;
+        for (var i = len-1; i >= 0; i--){
+            if(myElements[i].name == myName){
+                allItems.push(myElements[i]);
+            }
+        }
+    } else {
+        alert("ERROR 759403253473: Expected a valid doc, page or spread.");
+    }     
+    return allItems;
+}
+
+idUtil.getItemsByLabel = function (DocPageSpread, myLabel){
+    // This funcion returns an array of all items found with given label
+    // If nothing is found this function returns an empty array
+    var allItems = new Array();
+    if(DocPageSpread.isValid){
+        var myElements = DocPageSpread.allPageItems;
+        var len = myElements.length;
+        for (var i = len-1; i >= 0; i--){
+            if(myElements[i].label == myLabel){
+                allItems.push(myElements[i]);
+            }
+        }
+        // Guides are not part of pageItems but they can have labels too!
+        var myGuides   = DocPageSpread.guides;
+        var len = myGuides.length;
+        for (var i = len-1; i >= 0; i--){
+            if(myGuides[i].label == myLabel){
+                allItems.push(myGuides[i]);
+            }
+        }
+    } else {
+        alert("ERROR 759403253473: Expected a valid doc, page or spread.");
+    }     
+    return allItems;
+}
+
+idUtil.getMaxBounds = function ( pageElementArray ){
+  
+  if(pageElementArray.length == 0) {
+    alert("getMaxBounds received empty array :(");
+    return [0,0,0,0];
+  }
+
+  var maxBounds = pageElementArray[0].visibleBounds; //array [y1, x1, y2, x2], [top, left, bottom, right]
+  if(pageElementArray.length == 1) return maxBounds;
+  for(var i=1;i<pageElementArray.length;i++){
+    switch (pageElementArray[i].constructor.name){
+      case "Rectangle":
+      case "TextFrame":
+      case "Oval":
+      case "Polygon":
+      case "GraphicLine":
+      case "Group":
+      case "PageItem":
+        var itemBounds = pageElementArray[i].visibleBounds; //array [y1, x1, y2, x2], [top, left, bottom, right]
+        if(itemBounds[0] < maxBounds[0]){ maxBounds[0] = itemBounds[0]; }
+        if(itemBounds[1] < maxBounds[1]){ maxBounds[1] = itemBounds[1]; }
+        if(itemBounds[2] > maxBounds[2]){ maxBounds[2] = itemBounds[2]; }
+        if(itemBounds[3] > maxBounds[3]){ maxBounds[3] = itemBounds[2]; }
+        break;
+      default:
+        alert("getMaxBounds() received " + pageElementArray[i].constructor.name);
+        break;
+    }
+  }
+  return maxBounds;
+}
+
+idUtil.calcOffset = function (itemBounds, page, preset){
+  //Note: This function needs a better name
+  var ib = idUtil.getBoundsInfo(itemBounds);
+  var pb = idUtil.getBoundsInfo(page.bounds);
+
+  if(preset.alignTo == "barcode_box"){
+    // Now lets add it to the offsets
+    preset.offset.x += preset.selectionBounds[1];
+    preset.offset.y += preset.selectionBounds[0];
+    pb = idUtil.getBoundsInfo(preset.selectionBounds);
+  } else if(preset.alignTo == "Selection"){
+    // Now lets add it to the offsets
+    preset.offset.x += preset.selectionBounds[1];
+    preset.offset.y += preset.selectionBounds[0];
+    pb = idUtil.getBoundsInfo(preset.selectionBounds);
+  }
+
+  function addToBounds(b, x, y) {
+    b[0] += y; //topLeftY
+    b[1] += x; //topLeftX
+    b[2] += y; //botRightY
+    b[3] += x; //botRightX
+    return b;
+  }
+
+  // Deal with page
+  switch (preset.refPoint) {
+      case "TOP_LEFT_ANCHOR":
+          //addToBounds(ib, 0, 0);
+          break;
+      case "TOP_CENTER_ANCHOR":
+          ib.bounds = addToBounds(ib.bounds, (pb.width/2)-(ib.width/2), 0);
+          break;
+      case "TOP_RIGHT_ANCHOR":
+          ib.bounds = addToBounds(ib.bounds, pb.width-ib.width, 0);
+          break;
+      case "LEFT_CENTER_ANCHOR":
+          ib.bounds = addToBounds(ib.bounds, 0, (pb.height/2)-(ib.height/2) );
+          break;
+      case "CENTER_ANCHOR":
+          ib.bounds = addToBounds(ib.bounds, (pb.width/2)-(ib.width/2), (pb.height/2)-(ib.height/2) );
+          break;
+      case "RIGHT_CENTER_ANCHOR":
+          ib.bounds = addToBounds(ib.bounds, pb.width-ib.width, (pb.height/2)-(ib.height/2));
+          break;
+      case "BOTTOM_LEFT_ANCHOR":
+          ib.bounds = addToBounds(ib.bounds, 0, pb.height-ib.height);
+          break;
+      case "BOTTOM_CENTER_ANCHOR":
+          ib.bounds = addToBounds(ib.bounds, (pb.width/2)-(ib.width/2), pb.height-ib.height);
+          break;
+      case "BOTTOM_RIGHT_ANCHOR":
+          ib.bounds = addToBounds(ib.bounds, pb.width-ib.width, pb.height-ib.height);
+          break;
+      default:
+          break;
+  }
+  
+  // Deal with margin
+  if(preset.alignTo == "Page Margins"){
+    var mt = page.marginPreferences.top;
+    var mr = page.marginPreferences.right;
+    var ml = page.marginPreferences.left;
+    var mb = page.marginPreferences.bottom;
+    
+    // Weight: 0 center, 1 top or left, 2 bottom or right
+
+    var marginInfo = { vertical: {diff : Math.abs(mt-mb), weight : 0}, horizontal: {diff : Math.abs(ml-mr), weight : 0} };
+    
+    if(mt > mb){
+      marginInfo.vertical.weight = 1;
+    } else if (mt < mb) {
+      marginInfo.vertical.weight = 2;
+    }
+    if(ml > mr){
+      marginInfo.horizontal.weight = 1;
+    } else if (ml < mr) {
+      marginInfo.horizontal.weight = 2;
+    }
+
+    switch (preset.refPoint) {
+      case "TOP_LEFT_ANCHOR":
+          ib.bounds = addToBounds(ib.bounds, ml, mt); // X, Y
+          break;
+      case "TOP_CENTER_ANCHOR":
+          switch(marginInfo.horizontal.weight){
+            case 1: // Left
+              ib.bounds = addToBounds(ib.bounds, marginInfo.horizontal.diff/2, mt);
+              break;
+            case 2: // Right
+              ib.bounds = addToBounds(ib.bounds, -marginInfo.horizontal.diff/2, mt);
+              break;
+            default: // LR-CENTER
+              ib.bounds = addToBounds(ib.bounds, 0, mt);
+              break;
+          }
+          break;
+      case "TOP_RIGHT_ANCHOR":
+          ib.bounds = addToBounds(ib.bounds, -mr, mt);
+          break;
+      case "LEFT_CENTER_ANCHOR":
+          switch(marginInfo.vertical.weight){
+            case 1: // Top
+              ib.bounds = addToBounds(ib.bounds, ml, marginInfo.vertical.diff/2);
+              break;
+            case 2:  // Bottom
+              ib.bounds = addToBounds(ib.bounds, ml, -marginInfo.vertical.diff/2);
+              break;
+            default:
+              ib.bounds = addToBounds(ib.bounds, ml, 0);
+              break;
+          }
+          break;
+
+      case "CENTER_ANCHOR":
+          switch(marginInfo.horizontal.weight){
+            case 1: // Left
+              ib.bounds = addToBounds(ib.bounds, marginInfo.horizontal.diff/2, 0);
+              break;
+            case 2: // Right
+              ib.bounds = addToBounds(ib.bounds, -marginInfo.horizontal.diff/2, 0);
+              break;
+            default: // LR-CENTER
+              break;
+          }
+          switch(marginInfo.vertical.weight){
+            case 1: // top
+              ib.bounds = addToBounds(ib.bounds, 0, marginInfo.vertical.diff/2);
+              break;
+            case 2: // bot
+              ib.bounds = addToBounds(ib.bounds, 0, -marginInfo.vertical.diff/2);
+              break;
+            default: // LR-CENTER
+              break;
+          }
+          break;
+      case "RIGHT_CENTER_ANCHOR":
+          switch(marginInfo.vertical.weight){
+            case 1: // Top
+              ib.bounds = addToBounds(ib.bounds, -mr, marginInfo.vertical.diff/2);
+              break;
+            case 2:  // Bottom
+              ib.bounds = addToBounds(ib.bounds, -mr, -marginInfo.vertical.diff/2);
+              break;
+            default:
+              ib.bounds = addToBounds(ib.bounds, -mr, 0);
+              break;
+          }
+          break;
+      case "BOTTOM_LEFT_ANCHOR":
+          ib.bounds = addToBounds(ib.bounds, ml, -mb);
+          break;
+      case "BOTTOM_CENTER_ANCHOR":
+          switch(marginInfo.horizontal.weight){
+            case 1: // Left
+              ib.bounds = addToBounds(ib.bounds, marginInfo.horizontal.diff/2, -mb);
+              break;
+            case 2: // Right
+              ib.bounds = addToBounds(ib.bounds, -marginInfo.horizontal.diff/2, -mb);
+              break;
+            default: // LR-CENTER
+              ib.bounds = addToBounds(ib.bounds, 0, -mb);
+              break;
+          }
+          break;
+      case "BOTTOM_RIGHT_ANCHOR":
+          ib.bounds = addToBounds(ib.bounds, -mr, -mb);
+          break;
+      default:
+          break;
+    }
+  }
+
+  // Add UI bound offset
+  ib.bounds = addToBounds(ib.bounds, preset.offset.x, preset.offset.y);
+  return ib.bounds;
+};
+
+// END id_Util.js
 
 //https://www.isbn-international.org/range_file_generation
 
@@ -1554,1194 +2783,553 @@ ISBN.isbn.prototype = {
   }
 };
 
+// END isbn.js
 
+﻿function log(text) {
+  $.writeln(text);
+}
+
+var checkCheckDigit = function(str) {
+    // Check ISBN as found here:
+    // http://stackoverflow.com/questions/11104439/how-do-i-check-if-an-input-contains-an-isbn-using-javascript/
+
+    var str = String(str).replace(/[^0-9X]/gi, '');
+
+    var len,
+        sum,
+        weight,
+        digit,
+        check,
+        i;
+
+    if (str.length == 13) {
+        // ISBN-13 or padded ISSN
+        len = str.length-1;
+        sum = 0;
+        for (i = 0; i < len; i++) {
+            digit = parseInt(str[i]);
+            if (i % 2 == 1) {
+                sum += 3*digit;
+            } else {
+                sum += digit;
+            }
+        }
+        check = (10 - (sum % 10)) % 10;
+        if (check == 10) {
+            check = 'X';
+        }
+        return (check == str[str.length-1].toUpperCase());
+    }
+    
+    if (str.length == 10 || str.length == 8) {
+        // ISBN-10 or unpadded ISSN
+        len = str.length-1;
+        weight = str.length;
+        sum = 0;
+        for (i = 0; i < len; i++) {
+          digit = parseInt(str[i]);
+          sum += (weight - i) * digit;
+        }
+
+        check = (11 - sum % 11) % 11;
+        if (check == 10) {
+            check = 'X';
+        }
+        return (check == str[str.length-1].toUpperCase());
+    }
+
+
+      sum = (11 - sum % 11) % 11;
+      return sum === 10 ? 'X' : String(c);
+
+
+    return false;
+}
+
+function calculateCheckDigit(ean) {
+  var c, n, d;
+    if (ean.match(/^\d{9}[\dX]?$/)) {
+      // ISBN-10
+      c = 0;
+      for (n = 0; n < 9; n += 1) {
+        c += (10 - n) * ean.charAt(n);
+      }
+      c = (11 - c % 11) % 11;
+      return c === 10 ? 'X' : String(c);
+
+    } else if (ean.match(/(?:978|979|977)\d{9}[\dX]?/)) {
+      // ISBN-13 ISSN-13
+      c = 0;
+      for (n = 0; n < 12; n += 2) {
+        c += Number(ean.charAt(n)) + 3 * ean.charAt(n + 1);
+      }
+
+      //return String((10 - c % 10) % 10);
+      c = (10 - c % 10) % 10;
+      return c === 10 ? 'X' : String(c);
+    
+    } else if (ean.match(/^\d{7}[\dX]?$/)) {
+      //ISSN-8
+      /* Wrongly stated on http://www.issn.org/understanding-the-issn/issn-uses/identification-with-the-ean-13-barcode/
+      c = 0;
+      for (n = 0; n < 7; n++) {
+        d = Number(ean.charAt(n));
+        if (i % 2 == 1) {
+            // odd
+            c += 3*d;
+        } else {
+            // even
+            c += d;
+        }
+      }
+      c = 10 - (c % 10);
+      return c === 10 ? 'X' : String(c);
+      */
+      // Wikipedia is right for a change: https://en.wikipedia.org/wiki/International_Standard_Serial_Number
+      c = 0;
+      for (n = 0; n < 7; n += 1) {
+        c += (8 - n) * ean.charAt(n);
+      }
+      c = (11 - c % 11) % 11;
+      return c === 10 ? 'X' : String(c);
+
+    }
+
+    return null;
+}
+
+var Barcode = function () {
+  var barcode_string;
+  var addon_string;
+  var stripped;
+
+  function getNorm(bars) {
+    var curr = bars[0];
+    var counter = 1;
+    var norm = [];
+    for (var i = 1; i < bars.length; i++) {
+      if (curr !== bars[i]) {
+        norm.push(counter);
+        counter = 1;
+        curr = bars[i];
+      }
+      else {
+        counter++;
+      }
+    }
+    norm.push(counter);
+    return norm;
+  }
+
+  function stripAddon(str) {
+    return str.replace(/[^\d]+/g, '');
+  }
+  function stripEAN(str) {
+    return str.replace(/[^0-9X]/gi, '');
+  }
+
+  return {
+    init: function (preset) {
+      var eanStr   = String(preset.ean);
+      var addonStr = String(preset.addon);
+      
+      if (eanStr) {
+        barcode_string = eanStr;
+        stripped = stripEAN(barcode_string);
+        if ( !checkCheckDigit(stripped) ) {
+          throw "Check digit incorrect";
+        }
+      }
+
+      if (addonStr) {
+        addon_string = stripAddon(addonStr);
+        if(addon_string.length > 5) {
+        	throw "Addon should be 5 digits or less.\nLength is: " + addon_string.length;
+        }
+      }
+
+      return this;
+    },
+
+    getStripped: function () {
+      return stripped;
+    },
+	
+    getBarWidths: function () {
+      var barWidths = [];
+      for (var i = 1; i < stripped.length; i++) { //don't include first number of barcode
+        var encoding = pattern[i - 1];
+        var thisBarWidth = bar_widths[encoding][stripped[i]];
+        barWidths.push(thisBarWidth);
+      }
+      return barWidths;
+    },
+
+    getNormalisedWidths: function () {
+      var barWidths = this.getBarWidths();
+      var normalisedWidths = [];
+      var current = [];
+      for (var i = 0; i < barWidths.length; i++) {
+        current = [];
+        if (barWidths[i][0] === 0) {
+          current.push([0, 1, 0, 1]);
+        }
+        else {
+          current.push([1, 0, 1, 0]);
+        }
+        var norm = getNorm(barWidths[i]);
+        current.push(norm);
+        current.push(stripped[i+1]); //add ean digit
+        normalisedWidths.push(current);
+      }
+      return normalisedWidths;
+
+    },
+
+    getAddonWidths: function () {
+      if (! addon_string) {
+        return false;
+      }
+      else {
+        var checksum = this.getAddonChecksum();
+        var pattern = addon_pattern[checksum];
+        var widths = [];
+        for (var i = 0; i < addon_string.length; i++) {
+          //separators:
+          if (i === 0) {
+            widths.push([0, 1, 0, 1, 1]);
+          }
+          else {
+            widths.push([0, 1]);
+          }
+          var encoding = pattern[i];
+          widths.push(bar_widths[encoding][addon_string[i]]);
+        }
+        return widths;
+      }
+    },
+
+    getNormalisedAddon: function () {
+      var addonWidths = this.getAddonWidths();
+      if (! addonWidths) {
+        return false;
+      }
+      var normalisedAddon = [];
+      var current = [];
+      for (var i = 0; i < addonWidths.length; i++) {
+        current = [];
+        if (addonWidths[i].length == 2) {
+          current.push([0, 1])
+        }
+        else {
+          current.push([0, 1, 0, 1]);
+        }
+        current.push(getNorm(addonWidths[i]));
+        if (i % 2 == 1) {
+          current.push(addon_string[Math.floor(i / 2)]);
+        }
+        normalisedAddon.push(current);
+      }
+
+      return normalisedAddon;
+    },
+
+    getAddonChecksum: function () {
+      var total = 0;
+      for (var i = 0; i < addon_string.length; i++) {
+        if (i % 2 === 0) {
+          total += addon_string[i] * 3;
+        }
+        else {
+          total += addon_string[i] * 9;
+        }
+      }
+      return total % 10;
+    }
+
+  }
+};
 
 /*
+*
+* http://en.wikipedia.org/wiki/European_Article_Number
+*
+*/
 
-    JAXON is an array based preset manager for extendscript
-    It loads and saves presets to the user data-folder in JSON format
-    
-    It assumes your presets are objects collected in an array
-    
-    NOTE: At the moment this manager does not validate anything
+var pattern = ['L', 'G', 'G', 'L', 'G', 'L', 'R', 'R', 'R', 'R', 'R', 'R'];
 
-    Bruno Herfst 2016
+var addon_pattern = [
+  ['G', 'G', 'L', 'L', 'L'],
+  ['G', 'L', 'G', 'L', 'L'],
+  ['G', 'L', 'L', 'G', 'L'],
+  ['G', 'L', 'L', 'L', 'G'],
+  ['L', 'G', 'G', 'L', 'L'],
+  ['L', 'L', 'G', 'G', 'L'],
+  ['L', 'L', 'L', 'G', 'G'],
+  ['L', 'G', 'L', 'G', 'L'],
+  ['L', 'G', 'L', 'L', 'G'],
+  ['L', 'L', 'G', 'L', 'G']
+];
 
-    Version 0.1
-    
-    Public Domain.
+var bar_widths = {
+  L: [
+    [0, 0, 0, 1, 1, 0, 1],
+    [0, 0, 1, 1, 0, 0, 1],
+    [0, 0, 1, 0, 0, 1, 1],
+    [0, 1, 1, 1, 1, 0, 1],
+    [0, 1, 0, 0, 0, 1, 1],
+    [0, 1, 1, 0, 0, 0, 1],
+    [0, 1, 0, 1, 1, 1, 1],
+    [0, 1, 1, 1, 0, 1, 1],
+    [0, 1, 1, 0, 1, 1, 1],
+    [0, 0, 0, 1, 0, 1, 1]
+  ],
+  G: [
+    [0, 1, 0, 0, 1, 1, 1],
+    [0, 1, 1, 0, 0, 1, 1],
+    [0, 0, 1, 1, 0, 1, 1],
+    [0, 1, 0, 0, 0, 0, 1],
+    [0, 0, 1, 1, 1, 0, 1],
+    [0, 1, 1, 1, 0, 0, 1],
+    [0, 0, 0, 0, 1, 0, 1],
+    [0, 0, 1, 0, 0, 0, 1],
+    [0, 0, 0, 1, 0, 0, 1],
+    [0, 0, 1, 0, 1, 1, 1]
+  ],
+  R: [
+    [1, 1, 1, 0, 0, 1, 0],
+    [1, 1, 0, 0, 1, 1, 0],
+    [1, 1, 0, 1, 1, 0, 0],
+    [1, 0, 0, 0, 0, 1, 0],
+    [1, 0, 1, 1, 1, 0, 0],
+    [1, 0, 0, 1, 1, 1, 0],
+    [1, 0, 1, 0, 0, 0, 0],
+    [1, 0, 0, 0, 1, 0, 0],
+    [1, 0, 0, 1, 0, 0, 0],
+    [1, 1, 1, 0, 1, 0, 0]
+  ]
+};
 
-    NO WARRANTY EXPRESSED OR IMPLIED. USE AT YOUR OWN RISK.
+// END barcode_library.js
+
+/* 
+
+  esfm.js
+
+  ExtendScript Font Manager
+  
+  Many parts of this code borrowed from IndiSnip
+  http://indisnip.wordpress.com/2010/08/24/findchange-missing-font-with-scripting/
 
 */
 
-var jaxon = function(filePath, standardPresets, templatePreset, presetLockChar){
 
+var fontManager = function() {
     // ref to self
-    var self = this;
+    var Esfm = this;
+    // TO COME...
+    // I would like to be able to save outlines
+    // so we can draw barcodes when fonts are not loaded
+}
 
-    self._clone = function( something ) {
-        //clones whatever it is given via JSON conversion
-        return self.JSON.parse(self.JSON.stringify( something ));
+//get unique Array elements
+Array.prototype.unique = function () {
+  var r = new Array();
+  o:for (var i = 0, n = this.length; i < n; i++) {
+    for (var x = 0, y = r.length; x < y; x++) {
+      if (r[x]==this[i]) {
+        continue o;
+      }
     }
+    r[r.length] = this[i];
+  }
+  return r;
+}
 
-    self._not_in_array = function(arr, element) {
-        for(var i=0; i<arr.length; i++) {
-            if (arr[i] == element) return false;
-        }
-        return true;
+//search inside array
+Array.prototype.findIn = function(search){
+  var r = Array();
+  for (var i=0; i<this.length; i++) {
+    if (this[i].indexOf(search) != -1) {
+      r.push(this[i].substr(this[i].indexOf("\t") + 1, this[i].length));
     }
-
-    self._fileExist = function(filePath) {
-        var f = File(filePath);
-        if(f.exists){
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    self._writeFile = function(filePath, contentString) {
-        var f = File(filePath);
-        try{
-            if( !f.open('w') ){
-                alert("Error opening file at " + filePath +" \n "+ f.error);
-            }
-            if( !f.write( String(contentString) ) ){
-                alert("Error writing to file at " + filePath +" \n "+ f.error);
-            }
-            if( !f.close() ){
-                alert("Error closing file at " + filePath +" \n "+ f.error);
-            }
-            return f;
-        } catch (t) {
-            alert("Error writing to file at " + filePath +" \n "+ t.error);
-        }
-        
-        f.close();
-        return false;
-    }
-
-    self._updatePreset = function(OldPreset, NewPreset, ignoreKeys){
-        // This function will try and copy the old presets
-        for (var key in NewPreset) {
-            if(OldPreset.hasOwnProperty(key)){
-                if ( self._not_in_array(ignoreKeys, key) ){
-                    NewPreset[key] = OldPreset[key];
-                }
-            }
-        }
-        return NewPreset;
-    }
-
-    self._savePresets = function(filePath, obj){
-        var objStr   = self.JSON.stringify(obj);
-        if( self._writeFile(filePath, objStr) ) {
-            return true;
-        } else {
-            alert("Could not write to file " + filePath);
-            return false;
-        }
-    }
-
-    self._loadPresets = function(filePath){
-
-        if(!self._fileExist(filePath)){
-            alert("Cannot load presets.\nFile does not exist.");
-            return false;
-        }
-
-        var fSettings = File(filePath);
-        fSettings.open('r');
-        var content = fSettings.read();
-        fSettings.close();
-
-        try {
-            var presets = self.JSON.parse(content);
-        } catch(e) {
-            alert("Error reading JSON\n" + e.description);
-            var presets = self.presets;
-        }
-
-        for (var p in presets) {
-            presets[p] = self.updatePreset(presets[p], []);
-        }
-
-        self.presets = presets;
-        return self.presets;
-    }
-    
-    //  standardPresets, templatePreset,
-
-    // ref to JSON
-    self.JSON     = JSON;
-    // standard file path
-    self.filePath = filePath;
-    // standard file
-    self.file     = File(self.filePath);
-    // current preset (The presets we manipulate)
-    self.presets  = self._clone(standardPresets);
-    // A template preset (For validation and return)
-    self.template = self._clone(templatePreset);
-    // preset locking character
-    // any preset starting with this character cannot be changed by the user
-    // users cannot start a preset with this character
-    self.lockChar = presetLockChar || '-';
-
-
-    //-------------------------------------------------
-    // S T A R T   P U B L I C   A P I
-    //-------------------------------------------------
-    
-    self.getPresets = function(){
-        // return a copy of all presets
-        return self._clone(self.presets);
-    }
-
-    self.getPreset = function(key, val) {
-        // Sample usage: Jaxon.getPreset('id',3);
-        for (var i = 0; i < self.presets.length; i++) {
-            for (var thisKey in self.presets[i]) {
-                if (thisKey == key) {
-                    if(self.presets[i][key] == val) {
-                        return self.presets[i];
-                    }
-                    continue;
-                }
-            }
-        }
-
-        return null;
-    }
-    
-    self.addPreset = function(obj) {
-        // Add optional before/after key?
-        self.presets.push(obj);
-        if( self._savePresets(self.filePath, self.presets) ) {
-            return true;
-        } else {
-            alert("Could not save presets to " + self.filePath);
-            return false;
-        }
-    }
-
-    self.addUniquePreset = function(obj, key, val) {
-        // Sample usage: Jaxon.addUniquePreset(obj, 'name', "My New Preset");
-        var exist = self.getPreset(key, val);
-        if(exist){
-            var a = confirm("Do you want to overwrite the existing preset?");
-            if (a == true) {
-                self.removePresets(key, val);
-            } else {
-                return false;
-            }
-        }
-        return self.addPreset(obj);
-    }
-    
-    self.updatePreset = function(obj, ignoreKeys) {
-        var ignoreKeys = ignoreKeys || [];
-        if(! ignoreKeys instanceof Array) {
-            throw "The function updatePreset expects ignoreKeys be type of array."
-        }
-        // Create a copy of the standard preset
-        var newPreset  = self._clone(self.template);
-        return self._updatePreset(obj, newPreset, ignoreKeys);
-    }
-    
-    self.removePresets = function(key, val) {
-        // Sample usage: Jaxon.removePresets('id',3);
-        var removedPresets = false;
-        var len = self.presets.length-1;
-        for (var i = len; i >= 0; i--) {
-            for (var thisKey in self.presets[i]) {
-                if (thisKey == key) {
-                    if(self.presets[i][key] == val) {
-                        self.presets.splice( i, 1 );
-                        removedPresets = true;
-                    }
-                    continue;
-                }
-            }
-        }
-        if(removedPresets){
-            if( self._savePresets(self.filePath, self.presets) ) {
-                return true;
-            } else {
-                alert("Could not save presets to " + self.filePath);
-            }
-        }
-        return false;
-    }
-    
-    self.presetString = function( obj ) {
-        return self.JSON.stringify(obj);
-    }
-    
-    //-------------------------------------------------
-    // E N D   P U B L I C   A P I
-    //-------------------------------------------------
-    
-    // I N I T
-    //---------    
-    // Save the presets if not exist
-    if(!self._fileExist( self.filePath ) ){
-        if(! self._savePresets( self.filePath, self.presets ) ){
-            alert("Failed to start Jaxon\nUnable to save presets to " + self.filePath);
-            return null;
-        }
-    }
-    // Load the presets
-    self._loadPresets(self.filePath);
+  }
+  return r;
 };
 
-//----------------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-//----------------------------------------------------------------------------------
-//
-// Start JSON
-//
-//----------------------------------------------------------------------------------
-//  json2.js
-//  2016-10-28
-//  Public Domain.
-//  NO WARRANTY EXPRESSED OR IMPLIED. USE AT YOUR OWN RISK.
-//  See http://github.com/douglascrockford/JSON-js/blob/master/json2.js
-
-// Create a JSON object only if one does not already exist. We create the
-// methods in a closure to avoid creating global variables.
-
-if (typeof JSON !== "object") {
-    JSON = {};
-}
-
-(function () {
-    "use strict";
-
-    var rx_one = /^[\],:{}\s]*$/;
-    var rx_two = /\\(?:["\\\/bfnrt]|u[0-9a-fA-F]{4})/g;
-    var rx_three = /"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g;
-    var rx_four = /(?:^|:|,)(?:\s*\[)+/g;
-    var rx_escapable = /[\\"\u0000-\u001f\u007f-\u009f\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g;
-    var rx_dangerous = /[\u0000\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g;
-
-    function f(n) {
-        // Format integers to have at least two digits.
-        return n < 10
-            ? "0" + n
-            : n;
-    }
-
-    function this_value() {
-        return this.valueOf();
-    }
-
-    if (typeof Date.prototype.toJSON !== "function") {
-
-        Date.prototype.toJSON = function () {
-
-            return isFinite(this.valueOf())
-                ? this.getUTCFullYear() + "-" +
-                        f(this.getUTCMonth() + 1) + "-" +
-                        f(this.getUTCDate()) + "T" +
-                        f(this.getUTCHours()) + ":" +
-                        f(this.getUTCMinutes()) + ":" +
-                        f(this.getUTCSeconds()) + "Z"
-                : null;
-        };
-
-        Boolean.prototype.toJSON = this_value;
-        Number.prototype.toJSON = this_value;
-        String.prototype.toJSON = this_value;
-    }
-
-    var gap;
-    var indent;
-    var meta;
-    var rep;
-
-
-    function quote(string) {
-
-// If the string contains no control characters, no quote characters, and no
-// backslash characters, then we can safely slap some quotes around it.
-// Otherwise we must also replace the offending characters with safe escape
-// sequences.
-
-        rx_escapable.lastIndex = 0;
-        return rx_escapable.test(string)
-            ? "\"" + string.replace(rx_escapable, function (a) {
-                var c = meta[a];
-                return typeof c === "string"
-                    ? c
-                    : "\\u" + ("0000" + a.charCodeAt(0).toString(16)).slice(-4);
-            }) + "\""
-            : "\"" + string + "\"";
-    }
-
-
-    function str(key, holder) {
-
-// Produce a string from holder[key].
-
-        var i;          // The loop counter.
-        var k;          // The member key.
-        var v;          // The member value.
-        var length;
-        var mind = gap;
-        var partial;
-        var value = holder[key];
-
-// If the value has a toJSON method, call it to obtain a replacement value.
-
-        if (value && typeof value === "object" &&
-                typeof value.toJSON === "function") {
-            value = value.toJSON(key);
-        }
-
-// If we were called with a replacer function, then call the replacer to
-// obtain a replacement value.
-
-        if (typeof rep === "function") {
-            value = rep.call(holder, key, value);
-        }
-
-// What happens next depends on the value's type.
-
-        switch (typeof value) {
-        case "string":
-            return quote(value);
-
-        case "number":
-
-// JSON numbers must be finite. Encode non-finite numbers as null.
-
-            return isFinite(value)
-                ? String(value)
-                : "null";
-
-        case "boolean":
-        case "null":
-
-// If the value is a boolean or null, convert it to a string. Note:
-// typeof null does not produce "null". The case is included here in
-// the remote chance that this gets fixed someday.
-
-            return String(value);
-
-// If the type is "object", we might be dealing with an object or an array or
-// null.
-
-        case "object":
-
-// Due to a specification blunder in ECMAScript, typeof null is "object",
-// so watch out for that case.
-
-            if (!value) {
-                return "null";
-            }
-
-// Make an array to hold the partial results of stringifying this object value.
-
-            gap += indent;
-            partial = [];
-
-// Is the value an array?
-
-            if (Object.prototype.toString.apply(value) === "[object Array]") {
-
-// The value is an array. Stringify every element. Use null as a placeholder
-// for non-JSON values.
-
-                length = value.length;
-                for (i = 0; i < length; i += 1) {
-                    partial[i] = str(i, value) || "null";
-                }
-
-// Join all of the elements together, separated with commas, and wrap them in
-// brackets.
-
-                v = partial.length === 0
-                    ? "[]"
-                    : gap
-                        ? "[\n" + gap + partial.join(",\n" + gap) + "\n" + mind + "]"
-                        : "[" + partial.join(",") + "]";
-                gap = mind;
-                return v;
-            }
-
-// If the replacer is an array, use it to select the members to be stringified.
-
-            if (rep && typeof rep === "object") {
-                length = rep.length;
-                for (i = 0; i < length; i += 1) {
-                    if (typeof rep[i] === "string") {
-                        k = rep[i];
-                        v = str(k, value);
-                        if (v) {
-                            partial.push(quote(k) + (
-                                gap
-                                    ? ": "
-                                    : ":"
-                            ) + v);
-                        }
-                    }
-                }
-            } else {
-
-// Otherwise, iterate through all of the keys in the object.
-
-                for (k in value) {
-                    if (Object.prototype.hasOwnProperty.call(value, k)) {
-                        v = str(k, value);
-                        if (v) {
-                            partial.push(quote(k) + (
-                                gap
-                                    ? ": "
-                                    : ":"
-                            ) + v);
-                        }
-                    }
-                }
-            }
-
-// Join all of the member texts together, separated with commas,
-// and wrap them in braces.
-
-            v = partial.length === 0
-                ? "{}"
-                : gap
-                    ? "{\n" + gap + partial.join(",\n" + gap) + "\n" + mind + "}"
-                    : "{" + partial.join(",") + "}";
-            gap = mind;
-            return v;
-        }
-    }
-
-// If the JSON object does not yet have a stringify method, give it one.
-
-    if (typeof JSON.stringify !== "function") {
-        meta = {    // table of character substitutions
-            "\b": "\\b",
-            "\t": "\\t",
-            "\n": "\\n",
-            "\f": "\\f",
-            "\r": "\\r",
-            "\"": "\\\"",
-            "\\": "\\\\"
-        };
-        JSON.stringify = function (value, replacer, space) {
-
-// The stringify method takes a value and an optional replacer, and an optional
-// space parameter, and returns a JSON text. The replacer can be a function
-// that can replace values, or an array of strings that will select the keys.
-// A default replacer method can be provided. Use of the space parameter can
-// produce text that is more easily readable.
-
-            var i;
-            gap = "";
-            indent = "";
-
-// If the space parameter is a number, make an indent string containing that
-// many spaces.
-
-            if (typeof space === "number") {
-                for (i = 0; i < space; i += 1) {
-                    indent += " ";
-                }
-
-// If the space parameter is a string, it will be used as the indent string.
-
-            } else if (typeof space === "string") {
-                indent = space;
-            }
-
-// If there is a replacer, it must be a function or an array.
-// Otherwise, throw an error.
-
-            rep = replacer;
-            if (replacer && typeof replacer !== "function" &&
-                    (typeof replacer !== "object" ||
-                    typeof replacer.length !== "number")) {
-                throw new Error("JSON.stringify");
-            }
-
-// Make a fake root object containing our value under the key of "".
-// Return the result of stringifying the value.
-
-            return str("", {"": value});
-        };
-    }
-
-
-// If the JSON object does not yet have a parse method, give it one.
-
-    if (typeof JSON.parse !== "function") {
-        JSON.parse = function (text, reviver) {
-
-// The parse method takes a text and an optional reviver function, and returns
-// a JavaScript value if the text is a valid JSON text.
-
-            var j;
-
-            function walk(holder, key) {
-
-// The walk method is used to recursively walk the resulting structure so
-// that modifications can be made.
-
-                var k;
-                var v;
-                var value = holder[key];
-                if (value && typeof value === "object") {
-                    for (k in value) {
-                        if (Object.prototype.hasOwnProperty.call(value, k)) {
-                            v = walk(value, k);
-                            if (v !== undefined) {
-                                value[k] = v;
-                            } else {
-                                delete value[k];
-                            }
-                        }
-                    }
-                }
-                return reviver.call(holder, key, value);
-            }
-
-
-// Parsing happens in four stages. In the first stage, we replace certain
-// Unicode characters with escape sequences. JavaScript handles many characters
-// incorrectly, either silently deleting them, or treating them as line endings.
-
-            text = String(text);
-            rx_dangerous.lastIndex = 0;
-            if (rx_dangerous.test(text)) {
-                text = text.replace(rx_dangerous, function (a) {
-                    return "\\u" +
-                            ("0000" + a.charCodeAt(0).toString(16)).slice(-4);
-                });
-            }
-
-// In the second stage, we run the text against regular expressions that look
-// for non-JSON patterns. We are especially concerned with "()" and "new"
-// because they can cause invocation, and "=" because it can cause mutation.
-// But just to be safe, we want to reject all unexpected forms.
-
-// We split the second stage into 4 regexp operations in order to work around
-// crippling inefficiencies in IE's and Safari's regexp engines. First we
-// replace the JSON backslash pairs with "@" (a non-JSON character). Second, we
-// replace all simple value tokens with "]" characters. Third, we delete all
-// open brackets that follow a colon or comma or that begin the text. Finally,
-// we look to see that the remaining characters are only whitespace or "]" or
-// "," or ":" or "{" or "}". If that is so, then the text is safe for eval.
-
-            if (
-                rx_one.test(
-                    text
-                        .replace(rx_two, "@")
-                        .replace(rx_three, "]")
-                        .replace(rx_four, "")
-                )
-            ) {
-
-// In the third stage we use the eval function to compile the text into a
-// JavaScript structure. The "{" operator is subject to a syntactic ambiguity
-// in JavaScript: it can begin a block or an object literal. We wrap the text
-// in parens to eliminate the ambiguity.
-
-                j = eval("(" + text + ")");
-
-// In the optional fourth stage, we recursively walk the new structure, passing
-// each name/value pair to a reviver function for possible transformation.
-
-                return (typeof reviver === "function")
-                    ? walk({"": j}, "")
-                    : j;
-            }
-
-// If the text is not JSON parseable, then a SyntaxError is thrown.
-
-            throw new SyntaxError("JSON.parse");
-        };
-    }
-}());
-
-// EOF
-
-
-
-// More info here: http://www.barcodeisland.com/ean13.phtml
-
-$.localize = true; // enable ExtendScript localisation engine
-
-var version = '0.2';
-
-function newPreset(){
-  return { name               : "[ New Preset ]",
-           version            : version,
-           doc                : undefined,
-           pageIndex          : -1,
-           ean                : "",
-           addon              : "",
-           codeFont           : "OCR B Std\tRegular",
-           readFont           : "OCR B Std\tRegular", // Setting tracking to -100 is nice for this font
-           readFontTracking   : 0,
-           whiteBox           : true,
-           humanReadable      : true,
-           alignTo            : "Page Margins",
-           selectionBounds    : [0,0,0,0],
-           refPoint           : "BOTTOM_RIGHT_ANCHOR",
-           offset             : { x : 0, y : 0 },
-           humanReadableStr   : "",
-           createOulines      : true,
-           heightPercent      : 100,
-           scalePercent       : 80,
-           qZoneIndicator     : true,
-           addQuietZoneMargin : 0 };
-}
-
-var stdSettings = [newPreset(),
-                   { name               : "[ Last Used ]",  // My personal preference :)
-                     version            : version,
-                     doc                : undefined,
-                     pageIndex          : -1,
-                     ean                : "",
-                     addon              : "",
-                     readFont           : "OCR B Std\tRegular", // Setting tracking to -100 is nice for this font
-                     codeFont           : "OCR B Std\tRegular",
-                     readFontTracking   : 0,
-                     whiteBox           : true,
-                     humanReadable      : true,
-                     alignTo            : "Page",
-                     selectionBounds    : [0,0,0,0],
-                     refPoint           : "CENTER_ANCHOR",
-                     offset             : { x : 0, y : 0 },
-                     humanReadableStr   : "",
-                     createOulines      : true,
-                     heightPercent      : 60,
-                     scalePercent       : 100,
-                     qZoneIndicator     : false,
-                     addQuietZoneMargin : 0 }];
-
-var presetsFilePath = Folder.userData + "/EAN13_barcode_Settings.json";
-
-// Start preset manager
-var Jaxon = new jaxon(presetsFilePath, stdSettings, stdSettings[0], '[');
-
-function getBarcodePreset(pageItem){
-  var tempData = pageItem.label;
-  if(tempData.length > 0){
-    var bData = Jaxon.JSON.parse(tempData);
-    if( typeof bData == 'object' && bData.hasOwnProperty('ean') ) {
-      return Jaxon.updatePreset(bData,['name']);
+Array.prototype.findID = function (str) {
+  for (var i = 0; i < this.length; i++) {
+    if (this[i].indexOf(str) === 0) {
+      return i;
     }
   }
-  return false;
-}
+  return 0;
+};
 
-function getStandardSettings(){
-  // Load presets
-  var presets = Jaxon.getPresets();
-  if (app.documents.length <= 0) return presets;
-  // else add active document setting to presets
 
-  var aDoc = app.activeDocument;
-
-  if (aDoc.isValid) {
-    var existingBarcodes = getItemsByName(aDoc, "Barcode_Settings");
-    if(existingBarcodes.length > 0) {
-      for (i = 0; i < existingBarcodes.length; i++) { 
-        var eBarcodePreset = getBarcodePreset(existingBarcodes[i]);
-        if(eBarcodePreset) {
-           eBarcodePreset.doc  = aDoc;
-           eBarcodePreset.name = "[ "+ eBarcodePreset.ean +" ]";
-           presets.unshift(eBarcodePreset);
-        }
+//FontSelect makes a font selection gui widget, and returns an object
+//with the single method getFont, which can be called to get the selected font
+function FontSelect(group, font, resetPresetDropdown) {
+  var fontFamily = "";
+  var fontStyle  = "";
+  
+  function setFontName(font) {
+    if (typeof font === 'string' || font instanceof String) {
+      var splitFont = font.split('\t');
+      if(splitFont.length == 2) {
+        fontFamily = splitFont[0];
+        fontStyle = splitFont[1];
       }
-    } else {
-      // Only go through this routine if there are no barcode boxes found
-      var aDocPreset      = newPreset();
-          aDocPreset.doc  = aDoc;
-          aDocPreset.name = "[ Active Document ]";
-      // Check if there is an entry for EAN
-      var tempData = aDoc.extractLabel('EAN');
-      if( tempData.length > 0 ){
-        aDocPreset.ean  = tempData;
+    }
+  }
+
+  setFontName(font);
+
+  var sysFonts = app.fonts.everyItem();
+  var sysFontsList = sysFonts.fontFamily.unique();
+  sysFontsList.unshift("- Select Font Family -");
+
+  var fontFamilyId = sysFontsList.findID(fontFamily);
+
+  var availableFonts = group.add('dropdownlist', undefined, sysFontsList);
+  var availableStyles = group.add('dropdownlist');
+
+  availableFonts.minimumSize = [230,25];
+  availableStyles.minimumSize = [220,25];
+  
+  availableFonts.onChange = function () {
+    availableStyles.removeAll();
+    var sysFontAvailableStyles = sysFonts.name.findIn(availableFonts.selection);
+    for (var i = 0; i < sysFontAvailableStyles.length; i++) {
+      availableStyles.add('item',sysFontAvailableStyles[i]);
+    }
+    fontStyleId = sysFontAvailableStyles.findID(fontStyle);
+    availableStyles.selection = fontStyleId;
+    resetPresetDropdown();
+  } 
+
+  availableStyles.onChange = function () {
+    resetPresetDropdown();
+  }
+
+  availableFonts.selection = fontFamilyId;
+
+  return {
+    getFont: function () {
+      if (availableFonts.selection && availableStyles.selection) {
+        return availableFonts.selection.text + '\t' + availableStyles.selection.text;
+      }
+      else {
+        return null; //Now we know the font is not loaded
+      }
+    },
+    setFont: function(fontName){
+      setFontName(fontName);
+      fontFamilyId = sysFontsList.findID(fontFamily);
+      availableFonts.selection = fontFamilyId;
+      
+      availableStyles.removeAll();
+      
+      var sysFontAvailableStyles = sysFonts.name.findIn(availableFonts.selection);
+      for (var i = 0; i < sysFontAvailableStyles.length; i++) {
+        availableStyles.add('item',sysFontAvailableStyles[i]);
       }
       
-      presets.unshift(aDocPreset);
+      fontStyleId = sysFontAvailableStyles.findID(fontStyle);
+      availableStyles.selection = fontStyleId;
     }
-  }
-  return presets;
+  };
 }
 
-function getBoundsInfo(bounds){
-      // This functions receives bounds (y1, x1, y2, x2)
-      // and returns an object with bounds and info as below
-      var topLeftY  = bounds[0];
-      var topLeftX  = bounds[1];
-      var botRightY = bounds[2];
-      var botRightX = bounds[3];
-      var height    = Math.abs(botRightY - topLeftY);
-      var width     = Math.abs(botRightX - topLeftX);
 
-      return {    bounds    : bounds,
-                  height    : height,
-                  width     : width,
-                  topLeft   : {x: topLeftX                , y: topLeftY               } , 
-                  topCenter : {x: topLeftX + (width/2)    , y: topLeftY               } , 
-                  topRight  : {x: botRightX               , y: topLeftY               } ,
-                  midLeft   : {x: topLeftX                , y: topLeftY  + (height/2) } , 
-                  midCenter : {x: topLeftX + (width/2)    , y: topLeftY  + (height/2) } , 
-                  midRight  : {x: botRightX               , y: topLeftY  + (height/2) } , 
-                  botLeft   : {x: topLeftX                , y: botRightY              } , 
-                  botCenter : {x: topLeftX + (width/2)    , y: botRightY              } ,
-                  botRight  : {x: botRightX               , y: botRightY              } };
-}
+// END esfm.js
 
-function setRuler(doc, myNewUnits){
-        
-    // This function sets the rulers to the disired measure units
-    // and returns the original preset that you can send back to
-    // this function to reset the rulers.
 
-    var myOldUnits = {xruler : doc.viewPreferences.horizontalMeasurementUnits, yruler: doc.viewPreferences.verticalMeasurementUnits, origin: doc.viewPreferences.rulerOrigin, zeroPoint: doc.zeroPoint };
-    
-    if (myNewUnits.hasOwnProperty('xruler') && myNewUnits.hasOwnProperty('yruler')){
-        doc.viewPreferences.horizontalMeasurementUnits = myNewUnits.xruler;
-        doc.viewPreferences.verticalMeasurementUnits   = myNewUnits.yruler;
-    } else if( myNewUnits.hasOwnProperty('units')) {
-        // Set both rulers to the sam unit
-        // We will cast everything to string so it can parse a wide variaty of input including the MeasurementUnits object
-        var stringUnits = String(myNewUnits.units).toLowerCase();
-        with(doc.viewPreferences){
-            switch(stringUnits) {
-                case "0":
-                case "millimeters":
-                case "mm":
-                case "millimeter":
-                case "zmms":
-                case "2053991795":
-                    horizontalMeasurementUnits = MeasurementUnits.MILLIMETERS;
-                    verticalMeasurementUnits   = MeasurementUnits.MILLIMETERS;
-                    break;
-                case "1":
-                case "inchesDecimal":
-                case "inch": // shorthand to decimal
-                case "zind":
-                case "2053729892":
-                    horizontalMeasurementUnits = MeasurementUnits.INCHES_DECIMAL;
-                    verticalMeasurementUnits   = MeasurementUnits.INCHES_DECIMAL;
-                    break;
-                case "inches":
-                case "zinc":
-                case "2053729891":
-                    horizontalMeasurementUnits = MeasurementUnits.MeasurementUnits.INCHES;
-                    verticalMeasurementUnits   = MeasurementUnits.MeasurementUnits.INCHES;
-                    break;
-                case "2":
-                case "points":
-                case "pt":
-                case "zpoi":
-                case "2054188905":
-                    horizontalMeasurementUnits = MeasurementUnits.POINTS;
-                    verticalMeasurementUnits   = MeasurementUnits.POINTS;
-                    break;
-                case "american_points":
-                case "apt":
-                case "zapt":
-                case "1514238068":
-                    horizontalMeasurementUnits = MeasurementUnits.AMERICAN_POINTS;
-                    verticalMeasurementUnits   = MeasurementUnits.AMERICAN_POINTS;
-                    break;
-                case "agates":
-                case "zagt":
-                case "2051106676":
-                    horizontalMeasurementUnits = MeasurementUnits.AGATES;
-                    verticalMeasurementUnits   = MeasurementUnits.AGATES;
-                    break;
-                case "bai":
-                case "zbai":
-                case "2051170665":
-                    horizontalMeasurementUnits = MeasurementUnits.BAI;
-                    verticalMeasurementUnits   = MeasurementUnits.BAI;
-                    break;
-                case "cm":
-                case "centimeter":
-                case "centimeters":
-                case "zcms":
-                case "2053336435":
-                    horizontalMeasurementUnits = MeasurementUnits.CENTIMETERS;
-                    verticalMeasurementUnits   = MeasurementUnits.CENTIMETERS;
-                    break;
-                case "ciceros":
-                case "c":
-                case "zcic":
-                case "2053335395":
-                    horizontalMeasurementUnits = MeasurementUnits.CICEROS;
-                    verticalMeasurementUnits   = MeasurementUnits.CICEROS;
-                    break;
-                case "custom":
-                case "cstm":
-                case "1131639917":
-                    horizontalMeasurementUnits = MeasurementUnits.CUSTOM;
-                    verticalMeasurementUnits   = MeasurementUnits.CUSTOM;
-                    break;
-                case "ha":
-                case "zha":
-                case "1516790048":
-                    horizontalMeasurementUnits = MeasurementUnits.HA;
-                    verticalMeasurementUnits   = MeasurementUnits.HA;
-                    break;
-                case "mils":
-                case "zmil":
-                case "2051893612":
-                    horizontalMeasurementUnits = MeasurementUnits.MILS;
-                    verticalMeasurementUnits   = MeasurementUnits.MILS;
-                    break;
-                case "picas":
-                case "p":
-                case "zpic":
-                case "2054187363":
-                    horizontalMeasurementUnits = MeasurementUnits.PICAS;
-                    verticalMeasurementUnits   = MeasurementUnits.PICAS;
-                    break;
-                case "pixels":
-                case "pixel":
-                case "px":
-                case "zpix":
-                case "2054187384":
-                    horizontalMeasurementUnits = MeasurementUnits.PIXELS;
-                    verticalMeasurementUnits   = MeasurementUnits.PIXELS;
-                    break;
-                case "q":
-                case "zque":
-                case "2054255973":
-                    horizontalMeasurementUnits = MeasurementUnits.Q;
-                    verticalMeasurementUnits   = MeasurementUnits.Q;
-                    break;
-                case "u":
-                case "zju":
-                case "2051691808":
-                    horizontalMeasurementUnits = MeasurementUnits.U;
-                    verticalMeasurementUnits   = MeasurementUnits.U;
-                    break;
-                default:
-                    alert("function setRuler:\nCould not parse MeasurementUnits: " + typeof(myNewUnits) + " " + myNewUnits );
-                    break;
-            }
-        }
-    }
-    
-    if(myNewUnits.hasOwnProperty('origin')){
-        doc.viewPreferences.rulerOrigin = myNewUnits.origin;
-    } else { // Use page origin if not defined
-        doc.viewPreferences.rulerOrigin = RulerOrigin.PAGE_ORIGIN;
-    }
-    if(myNewUnits.hasOwnProperty('zeroPoint')) {
-        doc.zeroPoint = myNewUnits.zeroPoint;
-    } else { // Use zero point if not defined
-        doc.zeroPoint = [0,0];
-    }
-    return myOldUnits;
-}
+﻿function showDialog( presetIndex ) {
+  var onloadIndex = presetIndex || 0;
+  var userChange  = true;
 
-function find(haystack, needle) {
-    for (var i = 0; i < haystack.length; i++) {
-        if(haystack[i] == needle) return i;
-    }
-    return 0; // Return the first element if nothing is found
-}
+  // Start ExtendScript Preset Manager
+  var Pm = new presetManager("EAN13_barcode_Settings.json", standardPresets);
 
-function getItemsByName(DocPageSpread, myName){
-    // This funcion returns an array of all items found with given label
-    // If nothing is found this function returns an empty array
-    var allItems = new Array();
-    if(DocPageSpread.isValid){
-        var myElements = DocPageSpread.allPageItems;
-        var len = myElements.length;
-        for (var i = len-1; i >= 0; i--){
-            if(myElements[i].name == myName){
-                allItems.push(myElements[i]);
-            }
-        }
-    } else {
-        alert("ERROR 759403253473: Expected a valid doc, page or spread.");
-    }     
-    return allItems;
-}
-
-function getItemsByLabel(DocPageSpread, myLabel){
-    // This funcion returns an array of all items found with given label
-    // If nothing is found this function returns an empty array
-    var allItems = new Array();
-    if(DocPageSpread.isValid){
-        var myElements = DocPageSpread.allPageItems;
-        var len = myElements.length;
-        for (var i = len-1; i >= 0; i--){
-            if(myElements[i].label == myLabel){
-                allItems.push(myElements[i]);
-            }
-        }
-        // Guides are not part of pageItems but they can have labels too!
-        var myGuides   = DocPageSpread.guides;
-        var len = myGuides.length;
-        for (var i = len-1; i >= 0; i--){
-            if(myGuides[i].label == myLabel){
-                allItems.push(myGuides[i]);
-            }
-        }
-    } else {
-        alert("ERROR 759403253473: Expected a valid doc, page or spread.");
-    }     
-    return allItems;
-}
-
-function getMaxBounds( pageElementArray ){
-  
-  if(pageElementArray.length == 0) {
-    alert("getMaxBounds received empty array :(");
-    return [0,0,0,0];
-  }
-
-  var maxBounds = pageElementArray[0].visibleBounds; //array [y1, x1, y2, x2], [top, left, bottom, right]
-  if(pageElementArray.length == 1) return maxBounds;
-  for(var i=1;i<pageElementArray.length;i++){
-    switch (pageElementArray[i].constructor.name){
-      case "Rectangle":
-      case "TextFrame":
-      case "Oval":
-      case "Polygon":
-      case "GraphicLine":
-      case "Group":
-      case "PageItem":
-        var itemBounds = pageElementArray[i].visibleBounds; //array [y1, x1, y2, x2], [top, left, bottom, right]
-        if(itemBounds[0] < maxBounds[0]){ maxBounds[0] = itemBounds[0]; }
-        if(itemBounds[1] < maxBounds[1]){ maxBounds[1] = itemBounds[1]; }
-        if(itemBounds[2] > maxBounds[2]){ maxBounds[2] = itemBounds[2]; }
-        if(itemBounds[3] > maxBounds[3]){ maxBounds[3] = itemBounds[2]; }
-        break;
-      default:
-        alert("getMaxBounds() received " + pageElementArray[i].constructor.name);
-        break;
-    }
-  }
-  return maxBounds;
-}
-
-function calcOffset(itemBounds, page, preset){
-
-  var ib = getBoundsInfo(itemBounds);
-  var pb = getBoundsInfo(page.bounds);
-
-  if(preset.alignTo == "barcode_box"){
-    // Now lets add it to the offsets
-    preset.offset.x += preset.selectionBounds[1];
-    preset.offset.y += preset.selectionBounds[0];
-    pb = getBoundsInfo(preset.selectionBounds);
-  } else if(preset.alignTo == "Selection"){
-    // Now lets add it to the offsets
-    preset.offset.x += preset.selectionBounds[1];
-    preset.offset.y += preset.selectionBounds[0];
-    pb = getBoundsInfo(preset.selectionBounds);
-  }
-
-  function addToBounds(b, x, y) {
-    b[0] += y; //topLeftY
-    b[1] += x; //topLeftX
-    b[2] += y; //botRightY
-    b[3] += x; //botRightX
-    return b;
-  }
-
-  // Deal with page
-  switch (preset.refPoint) {
-      case "TOP_LEFT_ANCHOR":
-          //addToBounds(ib, 0, 0);
-          break;
-      case "TOP_CENTER_ANCHOR":
-          ib.bounds = addToBounds(ib.bounds, (pb.width/2)-(ib.width/2), 0);
-          break;
-      case "TOP_RIGHT_ANCHOR":
-          ib.bounds = addToBounds(ib.bounds, pb.width-ib.width, 0);
-          break;
-      case "LEFT_CENTER_ANCHOR":
-          ib.bounds = addToBounds(ib.bounds, 0, (pb.height/2)-(ib.height/2) );
-          break;
-      case "CENTER_ANCHOR":
-          ib.bounds = addToBounds(ib.bounds, (pb.width/2)-(ib.width/2), (pb.height/2)-(ib.height/2) );
-          break;
-      case "RIGHT_CENTER_ANCHOR":
-          ib.bounds = addToBounds(ib.bounds, pb.width-ib.width, (pb.height/2)-(ib.height/2));
-          break;
-      case "BOTTOM_LEFT_ANCHOR":
-          ib.bounds = addToBounds(ib.bounds, 0, pb.height-ib.height);
-          break;
-      case "BOTTOM_CENTER_ANCHOR":
-          ib.bounds = addToBounds(ib.bounds, (pb.width/2)-(ib.width/2), pb.height-ib.height);
-          break;
-      case "BOTTOM_RIGHT_ANCHOR":
-          ib.bounds = addToBounds(ib.bounds, pb.width-ib.width, pb.height-ib.height);
-          break;
-      default:
-          break;
-  }
-  
-  // Deal with margin
-  if(preset.alignTo == "Page Margins"){
-    var mt = page.marginPreferences.top;
-    var mr = page.marginPreferences.right;
-    var ml = page.marginPreferences.left;
-    var mb = page.marginPreferences.bottom;
-    
-    // Weight: 0 center, 1 top or left, 2 bottom or right
-
-    var marginInfo = { vertical: {diff : Math.abs(mt-mb), weight : 0}, horizontal: {diff : Math.abs(ml-mr), weight : 0} };
-    
-    if(mt > mb){
-      marginInfo.vertical.weight = 1;
-    } else if (mt < mb) {
-      marginInfo.vertical.weight = 2;
-    }
-    if(ml > mr){
-      marginInfo.horizontal.weight = 1;
-    } else if (ml < mr) {
-      marginInfo.horizontal.weight = 2;
-    }
-
-    switch (preset.refPoint) {
-      case "TOP_LEFT_ANCHOR":
-          ib.bounds = addToBounds(ib.bounds, ml, mt); // X, Y
-          break;
-      case "TOP_CENTER_ANCHOR":
-          switch(marginInfo.horizontal.weight){
-            case 1: // Left
-              ib.bounds = addToBounds(ib.bounds, marginInfo.horizontal.diff/2, mt);
-              break;
-            case 2: // Right
-              ib.bounds = addToBounds(ib.bounds, -marginInfo.horizontal.diff/2, mt);
-              break;
-            default: // LR-CENTER
-              ib.bounds = addToBounds(ib.bounds, 0, mt);
-              break;
-          }
-          break;
-      case "TOP_RIGHT_ANCHOR":
-          ib.bounds = addToBounds(ib.bounds, -mr, mt);
-          break;
-      case "LEFT_CENTER_ANCHOR":
-          switch(marginInfo.vertical.weight){
-            case 1: // Top
-              ib.bounds = addToBounds(ib.bounds, ml, marginInfo.vertical.diff/2);
-              break;
-            case 2:  // Bottom
-              ib.bounds = addToBounds(ib.bounds, ml, -marginInfo.vertical.diff/2);
-              break;
-            default:
-              ib.bounds = addToBounds(ib.bounds, ml, 0);
-              break;
-          }
-          break;
-
-      case "CENTER_ANCHOR":
-          switch(marginInfo.horizontal.weight){
-            case 1: // Left
-              ib.bounds = addToBounds(ib.bounds, marginInfo.horizontal.diff/2, 0);
-              break;
-            case 2: // Right
-              ib.bounds = addToBounds(ib.bounds, -marginInfo.horizontal.diff/2, 0);
-              break;
-            default: // LR-CENTER
-              break;
-          }
-          switch(marginInfo.vertical.weight){
-            case 1: // top
-              ib.bounds = addToBounds(ib.bounds, 0, marginInfo.vertical.diff/2);
-              break;
-            case 2: // bot
-              ib.bounds = addToBounds(ib.bounds, 0, -marginInfo.vertical.diff/2);
-              break;
-            default: // LR-CENTER
-              break;
-          }
-          break;
-      case "RIGHT_CENTER_ANCHOR":
-          switch(marginInfo.vertical.weight){
-            case 1: // Top
-              ib.bounds = addToBounds(ib.bounds, -mr, marginInfo.vertical.diff/2);
-              break;
-            case 2:  // Bottom
-              ib.bounds = addToBounds(ib.bounds, -mr, -marginInfo.vertical.diff/2);
-              break;
-            default:
-              ib.bounds = addToBounds(ib.bounds, -mr, 0);
-              break;
-          }
-          break;
-      case "BOTTOM_LEFT_ANCHOR":
-          ib.bounds = addToBounds(ib.bounds, ml, -mb);
-          break;
-      case "BOTTOM_CENTER_ANCHOR":
-          switch(marginInfo.horizontal.weight){
-            case 1: // Left
-              ib.bounds = addToBounds(ib.bounds, marginInfo.horizontal.diff/2, -mb);
-              break;
-            case 2: // Right
-              ib.bounds = addToBounds(ib.bounds, -marginInfo.horizontal.diff/2, -mb);
-              break;
-            default: // LR-CENTER
-              ib.bounds = addToBounds(ib.bounds, 0, -mb);
-              break;
-          }
-          break;
-      case "BOTTOM_RIGHT_ANCHOR":
-          ib.bounds = addToBounds(ib.bounds, -mr, -mb);
-          break;
-      default:
-          break;
-    }
-  }
-
-  // Add UI bound offset
-  ib.bounds = addToBounds(ib.bounds, preset.offset.x, preset.offset.y);
-  return ib.bounds;
-}
-
-function showDialog(presets, preset) {
-
-  var selectionBounds, pageBounds, marginBounds = [0,0,0,0];
-  
-  preset.barcode_box = false;  
-  
-  var save = "Save Preset", clear = "Clear Preset";
-
-  if ( (preset === null) || (typeof preset !== 'object') ) {
-    var preset = presets[0];
-  }
-
-  preset.ean   = (typeof preset.ean   == 'string') ? preset.ean   : "";
-  preset.addon = (typeof preset.addon == 'string') ? preset.addon : "";
+  /*
+      Try and load extra presets from active document
+  */
+  var activeDoc = app.documents[0];
 
   var selectionBounds, pageBounds, marginBounds = [0,0,0,0];
   var alignToOptions = ["Page", "Page Margins"];
-  var docunits = "mm";
-  var list_of_pages = ["1"];
+  var docunits       = "mm";
+  var list_of_pages  = [];
+  var currentPage    = null;
+  var barcodeBox     = null;
 
-  if(preset.doc == undefined) {
-    preset.pageIndex = 0;
-  } else {
-    var list_of_pages = preset.doc.pages.everyItem().name;
-    if( (preset.pageIndex < 0) || (preset.pageIndex > list_of_pages.length-1) ) {
-      // Let’s see which page is selected
+  function checkActiveDoc( activeDoc ){
+    // Update pages info
+    list_of_pages = activeDoc.pages.everyItem().name;
+    currentPage   = app.activeWindow.activePage.name;
+
+    function getBarcodePreset( pageItem ){
+      var tempData = pageItem.label;
+      if(tempData.length > 0){
+        var bData = JSON.parse(tempData);
+        if( typeof bData == 'object' && bData.hasOwnProperty('ean') ) {
+          return Pm.format( bData );
+        }
+      }
+      return false;
+    }
+
+    function updatePageNumber( MyPreset ) {
+      // This function makes sure pagenumer is valid
+      if( (MyPreset.pageIndex < 0) || (MyPreset.pageIndex > list_of_pages.length-1) ) {
+        // Let’s see which page is selected
+        for (var j=0; j<=list_of_pages.length-1; j++){
+          if(list_of_pages[j] == currentPage){
+            MyPreset.pageIndex = j;
+            return MyPreset;
+          }
+        }
+      }
+      return MyPreset;
+    }
+
+    // Get existing barcodes in document andd add their settings to presets
+    var existingBarcodes = idUtil.getItemsByName(activeDoc, "Barcode_Settings");
+    if(existingBarcodes.length > 0) {
+      for (i = 0; i < existingBarcodes.length; i++) { 
+        var eBarcodePreset = getBarcodePreset(existingBarcodes[i]);
+        if( eBarcodePreset ) {
+            eBarcodePreset.name = "["+ eBarcodePreset.ean +"]";
+            eBarcodePreset = updatePageNumber( eBarcodePreset );
+            Pm.Presets.add(eBarcodePreset, 0);
+        }
+      }
+    } else {
+      // Only go through this routine if there are no barcode settings found
+      var activeDocPreset      = Pm.Presets.getTemplate();
+          activeDocPreset.name = "[Active Document]";
+      // Check if there is an entry for EAN
+      var tempData = activeDoc.extractLabel('EAN');
+      if( tempData.length > 0 ){
+        activeDocPreset.ean = tempData;
+        activeDocPreset = updatePageNumber( activeDocPreset );
+      }
+      // Save
+      Pm.Presets.add(activeDocPreset, 0);
+    } // End existing barcodes
+
+    // see if there is a barcode box on active spread
+    var barcode_boxes = idUtil.getItemsByLabel(app.activeWindow.activeSpread, "barcode_box");
+    if( barcode_boxes.length > 0 ) {
+      barcode_box = barcode_boxes[0];
+      alignToOptions.push("barcode_box");
+      Pm.UiPreset.setProp(alignTo, "barcode_box");
+      var selectionParentPage = barcode_box.parentPage.name;
+      // Let’s see which page contains selection
       for (var j=0; j<=list_of_pages.length-1; j++){
-        if(list_of_pages[j] == app.activeWindow.activePage.name){
-          preset.pageIndex = j;
+        if(list_of_pages[j] == selectionParentPage){
+          Pm.UiPreset.setProp(pageIndex, j);
           break;
         }
       }
@@ -2757,47 +3345,44 @@ function showDialog(presets, preset) {
         case "GraphicLine":
         case "Group":
         case "PageItem":
-          alignToOptions.push("Selection");
-          preset.alignTo = "Selection";
-          var selectionParentPage = app.selection[0].parentPage.name;
-          // Let’s see which page contains selection
-          for (var j=0; j<=list_of_pages.length-1; j++){
-            if(list_of_pages[j] == selectionParentPage){
-              preset.pageIndex = j;
-              break;
+          // Don't process items that are on the pasteboard
+          if ( app.selection[0].parentPage ) {
+            alignToOptions.push('Selection');
+            Pm.UiPreset.setProp('alignTo', 'Selection');
+            var selectionParentPage = app.selection[0].parentPage.name;
+            // Let’s see which page contains selection
+            for (var j=0; j<=list_of_pages.length-1; j++){
+              if(list_of_pages[j] == selectionParentPage){
+                Pm.UiPreset.setProp(pageIndex, j);
+                break;
+              }
             }
           }
           break;
         default:
           break;
       }
-    }
+    } // END check selection
+    
+  } //END checkActiveDoc
 
-    // see if there is a barcode box on active spread
-    var barcode_boxes = getItemsByLabel(app.activeWindow.activeSpread, "barcode_box");
-    if( barcode_boxes.length > 0 ) {
-      preset.barcode_box = barcode_boxes[0];
-      alignToOptions.push("barcode_box");
-      preset.alignTo = "barcode_box";
-      var selectionParentPage = preset.barcode_box.parentPage.name;
-      // Let’s see which page contains selection
-      for (var j=0; j<=list_of_pages.length-1; j++){
-        if(list_of_pages[j] == selectionParentPage){
-          preset.pageIndex = j;
-          break;
-        }
-      }
-    }
+  if ( activeDoc.isValid ) {
+    checkActiveDoc( activeDoc );   
   }
-  
-  //just for testing
-  //preset.ean   = '978-1-907360-21-3';
-  //preset.addon = '50995';
 
+  //-----------------------------------------------------------------------
+  //                         W I N D O W 
+  //-----------------------------------------------------------------------
   var dialog = new Window('dialog', 'EAN-13 Barcode Generator');
   dialog.orientation = 'column';
   dialog.alignChildren = 'left';
   dialog.margins = [15,10,15,20];
+
+  function createFresh() {
+    if(userChange) {
+      Pm.Widget.activateNew();
+    }
+  }
 
   //-------------
   // EAN-13 Input
@@ -2822,7 +3407,7 @@ function showDialog(presets, preset) {
   var eanInput = input.add('edittext');
   eanInput.characters = 15;
   eanInput.active = true;
-  eanInput.text = preset.ean;
+  eanInput.text = Pm.UiPreset.getProp('ean');
 
   eanInput.onChange = function () {
     var digits = eanInput.text.replace(/[^\dXx]+/g, '');
@@ -2910,31 +3495,45 @@ function showDialog(presets, preset) {
   input.add('statictext', undefined, 'Addon (optional):');
   var addonText = input.add('edittext');
   addonText.characters = 5;
-  addonText.text = preset.addon;
+  addonText.text = Pm.UiPreset.getProp('addon');
 
   var pageSelectPrefix = input.add('statictext', undefined, 'Page:');
-  var pageSelect = input.add('dropdownlist', undefined, list_of_pages);
-  pageSelect.selection = pageSelect.items[preset.pageIndex];
-
-  if(preset.doc == undefined) {
+  var pageSelect_dropDown = input.add('dropdownlist', undefined, list_of_pages);
+  pageSelect_dropDown.selection = pageSelect_dropDown.items[ Pm.UiPreset.getProp('pageIndex') ];
+  
+  if( ! activeDoc.isValid ) {
     // Don't show page select when there is no document open
-    pageSelect.visible = false;
+    pageSelect_dropDown.visible = false;
     pageSelectPrefix.visible = false;
   }
   
-  input.add('button', undefined, 'Generate', {name: 'ok'});
+  // ----------------------
+  // -- Start preset group
 
+  var presetPanel = dialog.add('group');
+  presetPanel.margins = [0,5,0,0];
+
+  //presetPanel.margins = [10,5,10,0];
+  presetPanel.orientation = 'row';
+  presetPanel.alignment = "right";
+
+  // -- End preset group
+  // ----------------------
+
+  // Add options
+  // -----------
+  var optionsPanel;
 
   // START SETTINGS PANEL
-  var settingsPanel = dialog.add('group');
-  settingsPanel.margins = 0;
-  settingsPanel.alignment = "fill";
-  settingsPanel.alignChildren = "left";
-  settingsPanel.orientation = 'column';
-  
+  optionsPanel = dialog.add('group');
+  optionsPanel.margins = 0;
+  optionsPanel.alignment = "fill";
+  optionsPanel.alignChildren = "left";
+  optionsPanel.orientation = 'column';
+
   // Start Fonts Panel
   // -----------------
-  var fontPanel = settingsPanel.add("panel", undefined, "Fonts");
+  var fontPanel = optionsPanel.add("panel", undefined, "Fonts");
   fontPanel.margins = [10,15,10,20];
   fontPanel.alignment = "fill";
   fontPanel.alignChildren = "left";
@@ -2942,31 +3541,30 @@ function showDialog(presets, preset) {
 
   fontPanel.add('statictext', undefined, 'Machine-readable');
   var codeFontRow = fontPanel.add('group');
-  var codeFontSelect = FontSelect(codeFontRow, preset.codeFont);
-  
+
+
+  var codeFontSelect = FontSelect(codeFontRow, Pm.UiPreset.getProp('codeFont'), createFresh );
+
   fontPanel.add('statictext', undefined, 'Human-readable');
   var readFontRow = fontPanel.add('group');
-  var readFontSelect = FontSelect(readFontRow, preset.readFont);
+  var readFontSelect = FontSelect(readFontRow, Pm.UiPreset.getProp('readFont'), createFresh );
 
   // End Fonts Panel
   // -----------------
 
-  // Add options
-  // -----------
-
-  var extraoptionsPanel = settingsPanel.add('group');
-      extraoptionsPanel.margins = 0;
-      extraoptionsPanel.alignment = "fill";
-      extraoptionsPanel.alignChildren = "left";
-      extraoptionsPanel.orientation   = 'row';
+  var extraoptionsPanel = optionsPanel.add('group');
+  extraoptionsPanel.margins = 0;
+  extraoptionsPanel.alignment = "fill";
+  extraoptionsPanel.alignChildren = "fill";
+  extraoptionsPanel.orientation   = 'row';
 
   /////////////////////
   // Start REF panel //
   /////////////////////
   var refPanel = extraoptionsPanel.add("panel", undefined, "Alignment");
   refPanel.margins = 20;
-  refPanel.alignment = "left";
-  refPanel.alignChildren = "top";
+  refPanel.alignment = "top";
+  refPanel.alignChildren = "fill";
   refPanel.orientation = 'row';
 
   // START REF SQUARE GROUP //
@@ -2994,6 +3592,7 @@ function showDialog(presets, preset) {
         midRow.children[i].value = false;
         botRow.children[i].value = false;
       }
+      createFresh();
     }
 
     midRow.children[i].onActivate = function(){
@@ -3001,6 +3600,7 @@ function showDialog(presets, preset) {
         topRow.children[i].value = false;
         botRow.children[i].value = false;
       }
+      createFresh();
     }
 
     botRow.children[i].onActivate = function(){
@@ -3008,171 +3608,12 @@ function showDialog(presets, preset) {
         topRow.children[i].value = false;
         midRow.children[i].value = false;
       }
+      createFresh();
     }
   }
 
-  setSelectedReferencePoint(preset.refPoint);
-  // END REF SQUARE GROUP //
-
-  var optionPanel = refPanel.add("group");
-  optionPanel.alignChildren = "top";
-  optionPanel.orientation = 'column';
-  
-
-  var alignToDropdown = optionPanel.add("dropdownlist", undefined, alignToOptions);
-  alignToDropdown.selection = find(alignToOptions, preset.alignTo);
-
-  var offsetXRow = optionPanel.add("group");
-  offsetXRow.alignChildren = "left";
-  offsetXRow.orientation = "row";
-  var offsetYRow = optionPanel.add("group");
-  offsetYRow.alignChildren = "left";
-  offsetYRow.orientation = "row";
-
-  offsetXRow.add("statictext", undefined,"Offset X: ");
-  var offsetX = offsetXRow.add("edittext", undefined,[preset.offset.x + " " + docunits]);
-  offsetX.characters=6;
-  offsetYRow.add("statictext", undefined,"Offset Y: ");
-  var offsetY = offsetYRow.add("edittext", undefined,[preset.offset.y + " " + docunits]);
-  offsetY.characters=6;
-
-  offsetX.onChange = function () {offsetX.text = parseFloat(offsetX.text) + " " + docunits;}
-  offsetY.onChange = function () {offsetY.text = parseFloat(offsetY.text) + " " + docunits;}
-
-  ///////////////////
-  // END REF panel //
-  ///////////////////
-
-  ////////////////////////////
-  // Start Adjustment panel //
-  ////////////////////////////
-  var adjustPanel = extraoptionsPanel.add("panel", undefined, "Adjustments");
-      adjustPanel.margins = 20;
-      adjustPanel.alignment = "fill";
-      adjustPanel.alignChildren = "left";
-      adjustPanel.orientation = 'column';
-
-  var heightAdjust = adjustPanel.add('group');
-  heightAdjust.add('statictext', undefined, 'Height adjustment:');
-  var heightPercentInput = heightAdjust.add('edittext', undefined, preset.heightPercent);
-  heightPercentInput.characters = 4;
-  heightPercentInput.onChanging = function () { heightPercentInput.text = String(parseFloat(heightPercentInput.text)) };
-  heightAdjust.add('statictext', undefined, '%');
-  
-  var scaleAdjust = adjustPanel.add('group');
-  scaleAdjust.add('statictext', undefined, 'Scale:');
-  var scalePercentInput = scaleAdjust.add('edittext', undefined, preset.scalePercent);
-  scalePercentInput.characters = 4;
-  scalePercentInput.onChanging = function () { scalePercentInput.text = String(scalePercentInput.text); };
-  scaleAdjust.add('statictext', undefined, '%');
-  
-  var whiteBG = adjustPanel.add ("checkbox", undefined, "White background");
-      whiteBG.value = preset.whiteBox || false;
-
-  var quietZoneIndicator = adjustPanel.add ("checkbox", undefined, "Quiet Zone Indicator");
-      quietZoneIndicator.value = preset.qZoneIndicator || false;
-
-  var HR = adjustPanel.add ("checkbox", undefined, "Human-readable");
-      HR.value = preset.humanReadable;
-
-  //////////////////////////
-  // END Adjustment panel //
-  //////////////////////////
-
-  // ----------------------
-  // -- Start preset group
-
-  var presetPanel = settingsPanel.add('group');
-  presetPanel.margins = [0,5,0,0];
-  presetPanel.orientation = 'row';
-  presetPanel.alignment = "right";
-
-  var presetDropDownList = new Array();
-  for (var i = 0; i < presets.length; i++){
-    presetDropDownList.push(presets[i].name);
-  }
-
-  var presetDropdown = presetPanel.add("dropdownlist", undefined, presetDropDownList);
-  presetDropdown.minimumSize = [215,25];
-  presetDropdown.selection = 0;
-
-  if(presetDropdown.selection.text.indexOf('[') == 0){
-      var addRemovePresetButton = presetPanel.add('button', undefined, save);
-    } else {
-      var addRemovePresetButton = presetPanel.add('button', undefined, clear);
-  }
-
-  presetDropdown.onChange = function(){
-    var pName = this.selection.text;
-    loadPresetData( Jaxon.getPreset("name", pName) );
-    if(pName.indexOf('[') == 0) {
-      addRemovePresetButton.text = save;
-    } else {
-      addRemovePresetButton.text = clear;
-    }
-  }
-
-  function updatePresetDropdown(){
-    presetDropdown.removeAll();
-    for (var i = 0; i < presets.length; i++){
-      presetDropdown.add("item", String(presets[i].name) );
-    }
-  }
-
-  function updatePresets() {
-    presets = Jaxon.getPresets();
-    updatePresetDropdown();
-  }
-
-  function addPreset(){
-    var pName = prompt("Name : ", "");
-    if(pName != null){
-      if( (pName.length <= 0) || (pName.indexOf('[') == 0) ){
-      alert("Not a valid name for preset!");
-        return addPreset();
-      }
-      updatePreset();
-      preset.name = pName;
-      if( Jaxon.addUniquePreset(preset, "name", preset.name) ) {
-        updatePresets();
-        presetDropdown.selection = presets.length-1;
-      }
-    } // else user pressed cancel
-  }
-
-  function removePreset(){
-    if( Jaxon.removePresets("name", presetDropdown.selection.text) ) {
-      updatePresets();
-      presetDropdown.selection = 0;
-    }
-  }
-
-  addRemovePresetButton.onClick = function () {
-    if( addRemovePresetButton.text == save){
-      addPreset();
-    } else {
-      removePreset();
-    }
-  }
-  
-  presetPanel.add('button', undefined, 'Cancel', {name: 'cancel'});
-
-  // -- End preset group
-  // ----------------------
-
-
-  // ADD BUTTON GROUP
-  /*
-  var buttonGroup = dialog.add('group');
-      buttonGroup.orientation = 'row';
-      buttonGroup.alignment = 'right';
-      buttonGroup.margins = [10,15,10,10];
-  buttonGroup.add('button', undefined, 'Cancel', {name: 'cancel'});
-  buttonGroup.add('button', undefined, 'Generate', {name: 'ok'});
-  */
-  // END BUTTON GROUP
-
-  function clearSelectedReferencePoint(){
+  // Reference panel functions
+  var clearSelectedReferencePoint = function(){
     for(var i = 0; i < 3; i++){
       topRow.children[i].value = false;
       midRow.children[i].value = false;
@@ -3180,7 +3621,7 @@ function showDialog(presets, preset) {
     }
   }
 
-  function setSelectedReferencePoint(ref){
+  var setSelectedReferencePoint = function( ref ) {
       // Deselct any active ref point
       clearSelectedReferencePoint();
       switch (ref) {
@@ -3216,7 +3657,7 @@ function showDialog(presets, preset) {
       }    
   }
 
-  function getSelectedReferencePoint(){
+  var getSelectedReferencePoint = function(){
     // Check top row
     var topRowOptions = ["TOP_LEFT_ANCHOR", "TOP_CENTER_ANCHOR", "TOP_RIGHT_ANCHOR" ];
     var midRowOptions = ["LEFT_CENTER_ANCHOR", "CENTER_ANCHOR", "RIGHT_CENTER_ANCHOR" ];
@@ -3235,66 +3676,188 @@ function showDialog(presets, preset) {
     }
   }
 
-  function updatePreset(){
-    // This function updates the preset with UI input
-    // Get fonts
-    preset.codeFont       = codeFontSelect.getFont();
-    preset.readFont       = readFontSelect.getFont();
-    // Get input
-    preset.ean            = eanInput.text.replace(/[^0-9X\-]/gi, ''); // Preserve human readable
-    preset.addon          = addonText.text.replace(/[^\d]+/g, '');
-    // Get Custom Settings
-    preset.scalePercent   = scalePercentInput.text.replace(/[^\d]+/g, '');
-    preset.heightPercent  = heightPercentInput.text.replace(/[^\d]+/g, '');
-    preset.whiteBox       = whiteBG.value;
-    preset.qZoneIndicator = quietZoneIndicator.value;
-    preset.humanReadable  = HR.value;
-    preset.alignTo        = alignToDropdown.selection.text;
-    preset.refPoint       = getSelectedReferencePoint();
-    preset.offset         = { x : parseFloat(offsetX.text), y : parseFloat(offsetY.text) };
-    preset.pageIndex      = pageSelect.selection.index || 0;
-    //preset.readFontTracking = ;
-    //preset.createOulines = ;
-  }
+  setSelectedReferencePoint( Pm.UiPreset.getProp('refPoint') );
+
+  var optionPanel = refPanel.add("group");
+  optionPanel.alignChildren = "top";
+  optionPanel.orientation = 'column';
   
-  function loadPresetData(p) {
+
+  var alignTo_dropDown = optionPanel.add("dropdownlist", undefined, alignToOptions);
+  alignTo_dropDown.selection = idUtil.find( alignToOptions, Pm.UiPreset.getProp('alignTo') );
+
+  alignTo_dropDown.onChange = function() {
+    createFresh();
+  }
+
+  var offsetXRow = optionPanel.add("group");
+  offsetXRow.alignChildren = "left";
+  offsetXRow.orientation = "row";
+  var offsetYRow = optionPanel.add("group");
+  offsetYRow.alignChildren = "left";
+  offsetYRow.orientation = "row";
+
+  var myOffset = Pm.UiPreset.getProp('offset');
+  var offX = String(myOffset.x) + " " + docunits;
+  offsetXRow.add("statictext", undefined,"Offset X: ");
+  var offsetX_editText = offsetXRow.add("edittext", undefined, offX );
+  offsetX_editText.characters=6;
+  offsetX_editText.onChange = function () {
+    offsetX_editText.text = parseFloat(offsetX_editText.text) + " " + docunits;  
+    createFresh();
+  }
+
+  offsetYRow.add("statictext", undefined,"Offset Y: ");
+  var offsetY_editText = offsetYRow.add("edittext", undefined, String(myOffset.y) + " " + docunits );
+  offsetY_editText.characters=6;
+  offsetY_editText.onChange = function () {
+    offsetY_editText.text = parseFloat(offsetY_editText.text) + " " + docunits;
+    createFresh();
+  }
+
+  ///////////////////
+  // END REF panel //
+  ///////////////////
+
+  ////////////////////////////
+  // Start Adjustment panel //
+  ////////////////////////////
+  var adjustPanel = extraoptionsPanel.add("panel", undefined, "Adjustments");
+      adjustPanel.margins = 20;
+      adjustPanel.alignment = "fill";
+      adjustPanel.alignChildren = "left";
+      adjustPanel.orientation = 'column';
+
+    var heightAdjust = adjustPanel.add('group');
+        heightAdjust.add('statictext', undefined, 'Height adjustment:');
+
+    var heightPercent_editText = heightAdjust.add('edittext', undefined, Pm.UiPreset.getProp('heightPercent') );
+    heightPercent_editText.characters = 4;
+    heightPercent_editText.onChange = function () {
+      heightPercent_editText.text = String(parseFloat(heightPercent_editText.text));
+      createFresh();
+    };
+    
+    heightAdjust.add('statictext', undefined, '%');
+    
+    var scaleAdjust = adjustPanel.add('group');
+        scaleAdjust.add('statictext', undefined, 'Scale:');
+    
+    var scalePercent_editText = scaleAdjust.add('edittext', undefined, Pm.UiPreset.getProp('scalePercent') );
+    scalePercent_editText.characters = 4;
+    scalePercent_editText.onChange = function () {
+      scalePercent_editText.text = String(scalePercent_editText.text);
+      createFresh();
+    };
+    
+    scaleAdjust.add('statictext', undefined, '%');
+    
+    var whiteBG_checkBox = adjustPanel.add ("checkbox", undefined, "White background");
+    whiteBG_checkBox.value = Pm.UiPreset.getProp('whiteBox');
+    whiteBG_checkBox.onClick = function () { 
+      createFresh();
+    }
+
+    var quiet_checkBox = adjustPanel.add ("checkbox", undefined, "Quiet Zone Indicator");
+    quiet_checkBox.value = Pm.UiPreset.getProp('qZoneIndicator');
+    quiet_checkBox.onClick = function () {
+      createFresh();
+    }
+
+    var HumanRead_checkBox = adjustPanel.add ("checkbox", undefined, "Human-readable");
+    HumanRead_checkBox.value = Pm.UiPreset.getProp('humanReadable');
+    HumanRead_checkBox.onClick = function () {
+      createFresh();
+    }
+  
+  function getData(){
+    // This function creates a new preset from UI data
     try {
-      // Set fonts
+      var NewPreset = Pm.UiPreset.get();
+    }catch(err){
+      alert(err);
+    }
+
+    // update NewPreset with latest data
+    NewPreset.ean            = eanInput.text.replace(/[^0-9X\-]/gi, ''); // Preserve human readable
+    NewPreset.addon          = addonText.text.replace(/[^\d]+/g, '');
+
+    // Update Custom Settings
+    NewPreset.codeFont       = codeFontSelect.getFont();
+    NewPreset.readFont       = readFontSelect.getFont();
+    NewPreset.scalePercent   = scalePercent_editText.text.replace(/[^\d]+/g, '');
+    NewPreset.heightPercent  = heightPercent_editText.text.replace(/[^\d]+/g, '');
+    NewPreset.whiteBox       = whiteBG_checkBox.value;
+    NewPreset.qZoneIndicator = quiet_checkBox.value;
+    NewPreset.humanReadable  = HumanRead_checkBox.value;
+    NewPreset.alignTo        = alignTo_dropDown.selection.text;
+    NewPreset.refPoint       = getSelectedReferencePoint();
+    NewPreset.offset         = { x : parseFloat(offsetX_editText.text), y : parseFloat(offsetY_editText.text) };
+    if( pageSelect_dropDown.visible ) {
+      NewPreset.pageIndex    = pageSelect_dropDown.selection.index;
+    }
+    
+    return NewPreset;
+  }
+
+  function renderData( p ) {
+    userChange = false;
+    try {
+      // Set input
+      // Don’t update EAN if there is allready in dialog
+      // This should check wheter ean is valid?
+      if( eanInput.text.length < 8 ) {
+          eanInput.text           = p.ean;
+          addonText.text          = p.addon;
+      }
+
+      // Set Custom Settings
       codeFontSelect.setFont(p.codeFont);
       readFontSelect.setFont(p.readFont);
-      // Set input
-      // Don’t update EAN if there is allready one in dialog
-      if(eanInput.text.length < 8) {
-        eanInput.text             = p.ean;
-        addonText.text            = p.addon;
-      }
-      // Set Custom Settings
-      scalePercentInput.text    = p.scalePercent;
-      heightPercentInput.text   = p.heightPercent;
-      whiteBG.value             = p.whiteBox;
-      HR.value                  = p.humanReadable;
-      alignToDropdown.selection = find(alignToOptions, p.alignTo);
+      scalePercent_editText.text    = String(p.scalePercent);
+      heightPercent_editText.text   = String(p.heightPercent);
+      whiteBG_checkBox.value        = p.whiteBox;
+      quiet_checkBox.value          = p.qZoneIndicator;
+      HumanRead_checkBox.value      = p.humanReadable;
+      alignTo_dropDown.selection    = idUtil.find(alignToOptions, p.alignTo);
       setSelectedReferencePoint(p.refPoint);
-      offsetX.text              = p.offset.x;
-      offsetY.text              = p.offset.y;
-      pageSelect.selection      = p.pageIndex;
-      preset.readFontTracking   = p.readFontTracking;
-      preset.createOulines      = p.createOulines;
+      offsetX_editText.text         = String(p.offset.x);
+      offsetY_editText.text         = String(p.offset.y);
+      if( pageSelect_dropDown.visible ) {
+        pageSelect_dropDown.selection = p.pageIndex;
+      }
     } catch (err) {
       alert("Error loading presets: " + err);
     }
+    userChange = true;
   }
 
+  // Add Buttons
+  //-------------
+  // Attach widget
+  Pm.Widget.attachTo( presetPanel, 'name', { getData:getData, renderData:renderData }, { onloadIndex:onloadIndex } );
+
+  // Add OK/Cancel
+  var cancelBut = presetPanel.add('button', undefined, 'Cancel', {name: 'cancel'});
+  var okBut     = presetPanel.add('button', undefined, 'Generate', {name: 'OK'});
+
+  // Set Return/Enter key to OK window
+  okBut.shortcutKey = 'R';
+  okBut.onShortcutKey = okBut.onClick;
+  dialog.defaultElement = okBut; 
+
+  // End buttons
+  //-------------
   if (dialog.show() === 1) {
-    // Save user presets
-    updatePreset();
+    // Save anf get user settings
+    var preset  = Pm.Widget.saveLastUsed();
     var pureEAN = preset.ean.replace(/[^\dXx]+/g, '');
 
     // Check EAN
     //----------
     if( pureEAN.length == 0 ) {
       alert("Please enter a valid EAN code.\n");
-      return showDialog(presets, preset); // Restart
+      return showDialog(-1); // Restart
     } else if(pureEAN.length == 13){
         if(pureEAN.substring(0, 3) == "977"){
             var ISSN = pureEAN.substring(3, 10);
@@ -3319,19 +3882,19 @@ function showDialog(presets, preset) {
 
     if( !checkCheckDigit(preset.ean) ) {
       alert("Check digit does not match.\n" + preset.ean);
-      return showDialog(presets, preset); // Restart
+      return showDialog(-1); // Restart
     }
 
     if( (preset.addon != "") && (preset.addon.length != 2) && (preset.addon.length != 5) ){
       alert("Addon should be 2 or 5 digits long.\nLength is: " + preset.addon.length );
-      return showDialog(presets, preset); // Restart
+      return showDialog(-1); // Restart
     }
     
     // Check Scale Percent
     //--------------------
     if(preset.scalePercent > 200 || preset.scalePercent < 80 ) {
       alert("Scale is outside target range.\nThe target size is 100% but the standards allow a range between 80% and 200%." );
-      return showDialog(presets, preset); // Restart
+      return showDialog(-1); // Restart
     }
 
     // Check Fonts
@@ -3340,24 +3903,20 @@ function showDialog(presets, preset) {
         if(preset.readFont == null) preset.readFont = "";
         if(preset.codeFont == null) preset.codeFont = "";
         alert("Please select your fonts first");
-        return showDialog(presets, preset); // Restart
+        return showDialog(-1); // Restart
     }
-    
 
     if( preset.alignTo == "barcode_box" ) {
-      var originalRulers = setRuler(preset.doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
+      var originalRulers = idUtil.setRuler(preset.doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
       preset.selectionBounds = preset.barcode_box.visibleBounds;
-      setRuler(preset.doc, originalRulers);
+      idUtil.setRuler(preset.doc, originalRulers);
     } else if( preset.alignTo == "Selection" ) {
-      var originalRulers = setRuler(preset.doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
-      preset.selectionBounds = getMaxBounds( app.selection );
-      setRuler(preset.doc, originalRulers);
+      var originalRulers = idUtil.setRuler(preset.doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
+      preset.selectionBounds = idUtil.getMaxBounds( app.selection );
+      idUtil.setRuler(preset.doc, originalRulers);
     } else {
       preset.selectionBounds = [0,0,0,0];
     }
-    
-    preset.readFontTracking = parseFloat(preset.readFontTracking);
-    preset.pageIndex        = pageSelect.selection.index || 0;
 
     return preset;
   }
@@ -3365,8 +3924,11 @@ function showDialog(presets, preset) {
     // User pressed cancel
     return false;
   }
-}
+};
 
+// END barcode_ui.js
+
+﻿// Start BarcodeDrawer
 var BarcodeDrawer = (function () {
   var doc;
   var originalRulers;
@@ -3406,7 +3968,7 @@ var BarcodeDrawer = (function () {
   function getCurrentOrNewDocument(preset, size) {
     var doc = undefined;
     try {
-      var doc = app.activeDocument;
+      var doc = app.activeDoc;
     } catch (noDocOpen) {
       var originalMarginPreference = {
         top    : app.marginPreferences.top,
@@ -3641,7 +4203,7 @@ var BarcodeDrawer = (function () {
 
   function savePresets() {
     var savePresetBox = drawBox(hpos - startX, 0, width, height+12+vOffset, 'None');
-        savePresetBox.label = String(presetString);
+        savePresetBox.label = presetString;
         savePresetBox.name  = "Barcode_Settings";
     return savePresetBox;
   }
@@ -3652,7 +4214,7 @@ var BarcodeDrawer = (function () {
     return whiteBox;
   }
 
-  function init(preset) {
+  function init( preset ) {
     // When any of these barcodes is at
     // its nominal or 100% size the width
     // of the narrowest bar or space is 0.33 mm
@@ -3688,7 +4250,7 @@ var BarcodeDrawer = (function () {
     hpos = startX+0;
     width += (preset.addQuietZoneMargin*2);
 
-    presetString = Jaxon.presetString( Jaxon.updatePreset(preset, ['name']) );
+    var presetString = JSON.stringify( preset );
   }
 
   function getSize(){
@@ -3696,7 +4258,7 @@ var BarcodeDrawer = (function () {
     return {  width : width * scale, height : _height * scale };
   }
 
-  function drawBarcode(preset) {
+  function drawBarcode( preset ) {
     var barcode = Barcode().init(preset);
     var barWidths = barcode.getNormalisedWidths();
     var addonWidths = barcode.getNormalisedAddon();
@@ -3714,7 +4276,7 @@ var BarcodeDrawer = (function () {
       page = doc.pages[preset.pageIndex];
     }
 
-    originalRulers = setRuler(doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
+    originalRulers = idUtil.setRuler(doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
     
     layer = doc.layers.item('barcode');    
     if (layer.isValid) {
@@ -3743,7 +4305,7 @@ var BarcodeDrawer = (function () {
     if(preset.qZoneIndicator) {
       var textBox = drawChar(preset, hpos, '>', preset.codeFont, preset.codeFontSize, true); //quiet zone indicator '>'
       var elements = outline(preset, textBox);
-      var elementsBounds = getMaxBounds( elements );
+      var elementsBounds = idUtil.getMaxBounds( elements );
 
       if(scale != 0 && elementsBounds[3] != 0) {
         elementsBounds[3] /= scale;
@@ -3779,40 +4341,40 @@ var BarcodeDrawer = (function () {
 
     // Let's position the barcode now
     BarcodeGroup.move(page.parent.pages[0]);
-    BarcodeGroup.visibleBounds = calcOffset(BarcodeGroup.visibleBounds, page, preset);
+    BarcodeGroup.visibleBounds = idUtil.calcOffset(BarcodeGroup.visibleBounds, page, preset);
     
     //reset rulers
-    setRuler(doc, originalRulers);
+    idUtil.setRuler(doc, originalRulers);
   }
 
   return {
     drawBarcode: drawBarcode
   }
-})();
+})(); 
 
-function main(presets){
-  if (typeof presets == 'undefined' || presets.length <= 0) {
-    presets = getStandardSettings();
-  }
-  var newSetting = showDialog(presets, presets[0]);
-  if (newSetting) {
-      try {
-        BarcodeDrawer.drawBarcode(newSetting);
-      } catch( error ) {
-        // Alert nice error
-        alert("Oops!\nHaving trouble creating a quality barcode: " + "Line " + error.line + ": " + error);
-        // Restart UI so we can either correct the EAN or select a valid font.
-        main(presets, newSetting);
-      }
+// END barcode_drawer.js
+
+
+function main(){
+  // Get preset from user
+  var userPreset = showDialog();
+
+  if( userPreset ) {
+      BarcodeDrawer.drawBarcode( userPreset );
   } // else: user pressed cancel
 }
 
 try {
-  if (parseFloat(app.version) < 6) {
+  // Run script with single undo if supported
+  if (parseFloat(app.version) < 6 || debug) {
     main();
   } else {
     app.doScript(main, ScriptLanguage.JAVASCRIPT, undefined, UndoModes.ENTIRE_SCRIPT, "Expand State Abbreviations");
   }
+  // Global error reporting
 } catch ( error ) {
-  alert("Oops!\nHaving trouble creating a quality barcode: " + "Line " + error.line + ": " + error);
-}
+  alert("I'm having trouble creating a quality barcode:\n" + error + " (Line " + error.line + " in file " + error.fileName + ")");
+};
+
+// END barcode_main.js
+
