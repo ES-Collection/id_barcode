@@ -32,10 +32,10 @@
 
 #targetengine 'EAN13_Barcode_Creator';
 
-$.localize = true; // enable ExtendScript localisation engine
+$.localize = false; // enable ExtendScript localisation engine
 
 var version = 0.4;
-var debug   = false;
+var debug   = true;
 
 // Template preset
 var standardPreset = { name               : "Standard",
@@ -65,7 +65,7 @@ var standardPresets = [standardPreset];
 
 /*
 
-    espm.js
+    presetManager.js
 
     An array based preset manager for extendscript    
 
@@ -351,6 +351,10 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         PresetsController.get = function () {
             return clean();
         }
+        
+        PresetsController.getTemplate = function() {
+            return Template.getInstance();
+        }
 
         PresetsController.getByKey = function ( key, val ) {
             // Sample usage: Espm.Presets.getByKey('id',3);
@@ -558,8 +562,8 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         var lastUsedPresetName = "";
 
         function updatePresetNames() {
-            newPresetName      = String(lockChar[0] + newName      + lockChar[1]);
-            lastUsedPresetName = String(lockChar[0] + lastUsedName + lockChar[1]);
+            newPresetName      = String(lockChar[0] + " " + newName      + " " + lockChar[1]);
+            lastUsedPresetName = String(lockChar[0] + " " + lastUsedName + " " + lockChar[1]);
         }
 
         // This makes it possible to update UI everytime UiPreset is changed
@@ -1220,7 +1224,7 @@ if (typeof JSON !== "object") {
     }
 }());
 
-// END espm.js
+// END presetManager.js
 
 
 ﻿var idUtil = new Object();
@@ -3112,25 +3116,10 @@ var bar_widths = {
 
 // END barcode_library.js
 
-/* 
-
-  esfm.js
-
-  ExtendScript Font Manager
-  
-  Many parts of this code borrowed from IndiSnip
+/*
+  Many parts of this code below are borrowed from IndiSnip
   http://indisnip.wordpress.com/2010/08/24/findchange-missing-font-with-scripting/
-
 */
-
-
-var fontManager = function() {
-    // ref to self
-    var Esfm = this;
-    // TO COME...
-    // I would like to be able to save outlines
-    // so we can draw barcodes when fonts are not loaded
-}
 
 //get unique Array elements
 Array.prototype.unique = function () {
@@ -3242,7 +3231,7 @@ function FontSelect(group, font, resetPresetDropdown) {
 }
 
 
-// END esfm.js
+// END fontDrop.js
 
 
 ﻿function showDialog( presetIndex ) {
@@ -3405,7 +3394,7 @@ function FontSelect(group, font, resetPresetDropdown) {
   input.orientation = 'row';
   
   var eanInput = input.add('edittext');
-  eanInput.characters = 15;
+  eanInput.characters = 17;
   eanInput.active = true;
   eanInput.text = Pm.UiPreset.getProp('ean');
 
@@ -3941,6 +3930,7 @@ var BarcodeDrawer = (function () {
   var reduce;
   var hpos;
   var vOffset;
+  var presetString;
 
   function drawLine(x1, y1, x2, y2) {
     x1 *= scale;
@@ -4250,7 +4240,7 @@ var BarcodeDrawer = (function () {
     hpos = startX+0;
     width += (preset.addQuietZoneMargin*2);
 
-    var presetString = JSON.stringify( preset );
+    presetString = JSON.stringify( preset );
   }
 
   function getSize(){

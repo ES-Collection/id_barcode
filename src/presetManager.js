@@ -1,6 +1,6 @@
 /*
 
-    espm.js
+    presetManager.js
 
     An array based preset manager for extendscript    
 
@@ -286,6 +286,10 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         PresetsController.get = function () {
             return clean();
         }
+        
+        PresetsController.getTemplate = function() {
+            return Template.getInstance();
+        }
 
         PresetsController.getByKey = function ( key, val ) {
             // Sample usage: Espm.Presets.getByKey('id',3);
@@ -493,8 +497,8 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         var lastUsedPresetName = "";
 
         function updatePresetNames() {
-            newPresetName      = String(lockChar[0] + newName      + lockChar[1]);
-            lastUsedPresetName = String(lockChar[0] + lastUsedName + lockChar[1]);
+            newPresetName      = String(lockChar[0] + " " + newName      + " " + lockChar[1]);
+            lastUsedPresetName = String(lockChar[0] + " " + lastUsedName + " " + lockChar[1]);
         }
 
         // This makes it possible to update UI everytime UiPreset is changed
@@ -1155,6 +1159,6 @@ if (typeof JSON !== "object") {
     }
 }());
 
-// END espm.js
+// END presetManager.js
 
 

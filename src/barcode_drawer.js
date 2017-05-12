@@ -11,6 +11,7 @@ var BarcodeDrawer = (function () {
   var reduce;
   var hpos;
   var vOffset;
+  var presetString;
 
   function drawLine(x1, y1, x2, y2) {
     x1 *= scale;
@@ -320,7 +321,7 @@ var BarcodeDrawer = (function () {
     hpos = startX+0;
     width += (preset.addQuietZoneMargin*2);
 
-    var presetString = JSON.stringify( preset );
+    presetString = JSON.stringify( preset );
   }
 
   function getSize(){

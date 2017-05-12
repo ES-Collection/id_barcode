@@ -158,7 +158,7 @@
   input.orientation = 'row';
   
   var eanInput = input.add('edittext');
-  eanInput.characters = 15;
+  eanInput.characters = 17;
   eanInput.active = true;
   eanInput.text = Pm.UiPreset.getProp('ean');
 

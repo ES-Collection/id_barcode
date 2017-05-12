@@ -32,10 +32,10 @@
 
 #targetengine 'EAN13_Barcode_Creator';
 
-$.localize = true; // enable ExtendScript localisation engine
+$.localize = false; // enable ExtendScript localisation engine
 
 var version = 0.4;
-var debug   = false;
+var debug   = true;
 
 // Template preset
 var standardPreset = { name               : "Standard",

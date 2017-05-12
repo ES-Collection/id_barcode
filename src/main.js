@@ -1,11 +1,11 @@
 ﻿#include 'header.js'
-#include 'espm.js'
-#include 'esfm.js'
-#include 'id_Util.js'
+#include 'presetManager.js'
+#include 'fontDrop.js'
+#include 'idUtil.js'
 #include 'isbn.js'
 #include 'barcode_library.js'
 #include 'barcode_drawer.js'
-#include 'barcode_ui.js'
+#include 'sui.js'
 
 function main(){
   // Get preset from user
