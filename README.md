@@ -1,7 +1,7 @@
 InDesign Barcode maker
 ======================
 
-Easily make EAN-13 based barcodes in InDesign.
+Easily generate EAN-13 based barcodes in InDesign.
 
 Use [`id_barcode.jsx`](https://github.com/gitbruno/id_barcode/raw/master/id_barcode.jsx) if you just want to use the plugin.
 
@@ -42,4 +42,7 @@ It will find elements with  script-label `barcode_box` and adds it to your selec
 
 InDesign Barcode Maker can add a 2-digit EAN-2, or 5-digit EAN-5 supplemental barcode, placed on the right-hand side. These add-on barcodes are generally used for newspapers, journals, magazines and periodicals to indicate the current year's issue number. Or for books and weighed products like food to indicate suggested retail price (MSRP).
 
+### Bar Width Adjustments (BWR)
+
+Bar Width Adjustment (also referred to as Bar Width Reduction, or BWR) is a method for adjusting the bars of a barcode to compensate for dot gain. You can enter the Bar Width Reduction in microns, milliinches (mil), millimeters or inches or actual dots.
 
