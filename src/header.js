@@ -53,6 +53,8 @@ var standardPreset = { name               : "Standard",
                        refPoint           : "BOTTOM_RIGHT_ANCHOR",
                        offset             : { x : 0, y : 0 },
                        humanReadableStr   : "",
+                       dpi                : 300,
+                       bwr                : 0.0035, // in inches: UI can convert from microns, milliinches (mil) and actual dots.
                        createOulines      : true,
                        heightPercent      : 100,
                        scalePercent       : 80,

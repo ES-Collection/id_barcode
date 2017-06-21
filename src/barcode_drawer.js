@@ -13,16 +13,6 @@ var BarcodeDrawer = (function () {
   var vOffset;
   var presetString;
 
-  function drawLine(x1, y1, x2, y2) {
-    x1 *= scale;
-    y1 *= scale;
-    x2 *= scale;
-    y2 *= scale;
-    var pathPoints = page.graphicLines.add().paths[0].pathPoints;
-    pathPoints[0].anchor = [x1, y1];
-    pathPoints[1].anchor = [x2, y2];
-  }
-
   function drawBox(x, y, boxWidth, boxHeight, colour) {
     x *= scale;
     y *= scale;
@@ -86,7 +76,7 @@ var BarcodeDrawer = (function () {
     if (! y) {
       y = vOffset;
     }
-    drawBox(hpos, y, barWidth - reduce, barHeight);
+    drawBox(hpos, y - (reduce/2), barWidth - (reduce/2), barHeight);
   }
 
   function drawAddonBar(addonWidth) {
@@ -285,14 +275,31 @@ var BarcodeDrawer = (function () {
     return whiteBox;
   }
 
+  function bwrToMm( BWRI, DPI, SCALE ) {
+    // Bar Width Reduction in Inches at the scale it will be used
+    var scale = parseFloat(SCALE);
+    var bwris = (parseFloat(BWRI)/100) * scale;
+    var dpi   = parseInt(DPI);
+
+    var dotWidth = 1/dpi;
+    var dotCount = Math.floor( dpi * bwris );
+
+    // Width reduction in whole dots (inches)
+    var bwrId = dotWidth * dotCount;
+    // Width reduction in whole dots (mm)
+    var bwrMm = bwrId * 25.4; // inch to mm
+    // returned scaled back value
+    return (bwrMm/scale) * 100;
+  }
+
   function init( preset ) {
     // When any of these barcodes is at
     // its nominal or 100% size the width
     // of the narrowest bar or space is 0.33 mm
     // scale = 0.33; // == 100%
-    var xDimensionPercent = 0.0033;
+    var xDimensionPercent = 0.0033; // 1%
     
-    // scale 0.33 == 100% // 0.264 == 80% // 0.31 Penguin
+    // scale 0.33 == 100% // 0.264 == 80% 
     scale = xDimensionPercent*preset.scalePercent;
     heightAdjustPercent = preset.heightPercent;
     vOffset = 5;
@@ -314,9 +321,9 @@ var BarcodeDrawer = (function () {
     guardHeight  = (guardHeight / 100) * heightAdjustPercent;
     addonHeight  = (addonHeight / 100) * heightAdjustPercent;
 
-    // Gain control: Dependent on paper properties and dot distribution. Best to leave to CtP process.
-    reduce = 0; // 10% dotgain == 0.1
-    
+    // Gain control: Dependent on paper properties and dot distribution.
+    reduce = bwrToMm( preset.bwr, preset.dpi, preset.scalePercent ); // 10% dotgain == 0.1
+
     startX = 10 + preset.addQuietZoneMargin;
     hpos = startX+0;
     width += (preset.addQuietZoneMargin*2);

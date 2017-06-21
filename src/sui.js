@@ -5,6 +5,8 @@
   // Start ExtendScript Preset Manager
   var Pm = new presetManager("EAN13_barcode_Settings.json", standardPresets);
 
+  var bwrUnits = ['dots', 'mm', 'µm', 'inch', 'mils'];
+
   /*
       Try and load extra presets from active document
   */
@@ -130,6 +132,14 @@
   dialog.orientation = 'column';
   dialog.alignChildren = 'left';
   dialog.margins = [15,10,15,20];
+
+  function NaN20(num){
+      if(isNaN(num)){
+          return 0;
+      } else {
+          return num;
+      }
+  }
 
   function createFresh() {
     if(userChange) {
@@ -435,7 +445,6 @@
   optionPanel.alignChildren = "top";
   optionPanel.orientation = 'column';
   
-
   var alignTo_dropDown = optionPanel.add("dropdownlist", undefined, alignToOptions);
   alignTo_dropDown.selection = idUtil.find( alignToOptions, Pm.UiPreset.getProp('alignTo') );
 
@@ -475,17 +484,22 @@
   ////////////////////////////
   // Start Adjustment panel //
   ////////////////////////////
+  var tab = 50;
+
   var adjustPanel = extraoptionsPanel.add("panel", undefined, "Adjustments");
       adjustPanel.margins = 20;
       adjustPanel.alignment = "fill";
       adjustPanel.alignChildren = "left";
       adjustPanel.orientation = 'column';
 
+    //-------------------
+
     var heightAdjust = adjustPanel.add('group');
-        heightAdjust.add('statictext', undefined, 'Height adjustment:');
+    var heightLabel  = heightAdjust.add('statictext', undefined, 'Height:');
+        heightLabel.minimumSize.width = tab;
 
     var heightPercent_editText = heightAdjust.add('edittext', undefined, Pm.UiPreset.getProp('heightPercent') );
-    heightPercent_editText.characters = 4;
+        heightPercent_editText.characters = 7;
     heightPercent_editText.onChange = function () {
       heightPercent_editText.text = String(parseFloat(heightPercent_editText.text));
       createFresh();
@@ -493,17 +507,53 @@
     
     heightAdjust.add('statictext', undefined, '%');
     
+    //-------------------
+
     var scaleAdjust = adjustPanel.add('group');
-        scaleAdjust.add('statictext', undefined, 'Scale:');
-    
+    var scaleLabel  = scaleAdjust.add('statictext', undefined, 'Scale:');
+        scaleLabel.minimumSize.width = tab;
+
     var scalePercent_editText = scaleAdjust.add('edittext', undefined, Pm.UiPreset.getProp('scalePercent') );
-    scalePercent_editText.characters = 4;
-    scalePercent_editText.onChange = function () {
-      scalePercent_editText.text = String(scalePercent_editText.text);
-      createFresh();
-    };
+        scalePercent_editText.characters = 7;
+        scalePercent_editText.onChange = function () {
+          scalePercent_editText.text = NaN20(parseFloat(scalePercent_editText.text));
+          createFresh();
+        };
     
     scaleAdjust.add('statictext', undefined, '%');
+
+    //-------------------
+
+    var dpiAdjust = adjustPanel.add('group');
+    var dpiLabel  = dpiAdjust.add('statictext', undefined, 'Output:');
+        dpiLabel.minimumSize.width = tab;
+    
+    var dpi_editText = dpiAdjust.add('edittext', undefined, Pm.UiPreset.getProp('dpi') );
+        dpi_editText.characters = 7;
+        dpi_editText.onChange = function () {
+          dpi_editText.text = NaN20(parseInt(dpi_editText.text));
+          createFresh();
+        };
+
+    dpiAdjust.add('statictext', undefined, 'DPI');
+
+    //-------------------
+
+    var bwrAdjust = adjustPanel.add('group');
+    var bwrLabel  = bwrAdjust.add('statictext', undefined, 'BWR:');
+        bwrLabel.minimumSize.width = tab;
+    
+    var bwr_editText = bwrAdjust.add('edittext', undefined, Pm.UiPreset.getProp('bwr') );
+        bwr_editText.characters = 7;
+        bwr_editText.onChange = function () {
+          bwr_editText.text = NaN20(parseFloat(bwr_editText.text));
+          createFresh();
+        };
+
+    var bwr_measureDrop = bwrAdjust.add("dropdownlist", undefined, bwrUnits);
+        bwr_measureDrop.selection = 3; // inch
+
+    //-------------------
     
     var whiteBG_checkBox = adjustPanel.add ("checkbox", undefined, "White background");
     whiteBG_checkBox.value = Pm.UiPreset.getProp('whiteBox');
@@ -522,7 +572,32 @@
     HumanRead_checkBox.onClick = function () {
       createFresh();
     }
-  
+
+  function convertBWRtoInches( bwrValue, DPI, bwrUnit) {
+    switch( bwrUnit ) {
+      case 0: // dots
+        return 1 / parseInt(DPI);
+        break;
+      case 1: // milimeters
+        return parseFloat(bwrValue) / 25.4;
+        break;
+      case 2: // micron
+        return parseFloat(bwrValue) / 25400;
+        break;
+      case 3: // inch
+        return parseFloat(bwrValue);
+        break;
+      case 4: // mils
+        return parseFloat(bwrValue) / 1000;
+        break;
+      default:
+        break; 
+    }
+    // If we get here something went wrong
+    alert("Not a valid BWR unit: " + bwrUnit );
+    return bwrValue;
+  }
+
   function getData(){
     // This function creates a new preset from UI data
     try {
@@ -543,6 +618,8 @@
     NewPreset.whiteBox       = whiteBG_checkBox.value;
     NewPreset.qZoneIndicator = quiet_checkBox.value;
     NewPreset.humanReadable  = HumanRead_checkBox.value;
+    NewPreset.dpi            = parseInt(dpi_editText.text);
+    NewPreset.bwr            = convertBWRtoInches( parseInt(bwr_editText.text), NewPreset.dpi, bwr_measureDrop.selection.index);
     NewPreset.alignTo        = alignTo_dropDown.selection.text;
     NewPreset.refPoint       = getSelectedReferencePoint();
     NewPreset.offset         = { x : parseFloat(offsetX_editText.text), y : parseFloat(offsetY_editText.text) };
@@ -572,6 +649,9 @@
       whiteBG_checkBox.value        = p.whiteBox;
       quiet_checkBox.value          = p.qZoneIndicator;
       HumanRead_checkBox.value      = p.humanReadable;
+      dpi_editText.text             = p.dpi;
+      bwr_editText.text             = p.bwr;
+      bwr_measureDrop.selection     = 3; // Data is saved in inches
       alignTo_dropDown.selection    = idUtil.find(alignToOptions, p.alignTo);
       setSelectedReferencePoint(p.refPoint);
       offsetX_editText.text         = String(p.offset.x);
