@@ -1,4 +1,4 @@
-﻿// Start BarcodeDrawer
+// Start BarcodeDrawer
 var BarcodeDrawer = (function () {
   var doc;
   var originalRulers;
@@ -12,6 +12,31 @@ var BarcodeDrawer = (function () {
   var hpos;
   var vOffset;
   var presetString;
+
+  function getBWR_mm( bwrObj, DPI ) {
+    switch( bwrObj.unit ) {
+      case "dots":
+        return ((1 / parseInt(DPI)) * bwrObj.value ) * 25.4;
+        break;
+      case "mm":
+        return bwrObj.value;
+        break;
+      case "µm":
+        return bwrObj.value * 0.001
+        break;
+      case "inch":
+        return bwrObj.value * 25.4;
+        break;
+      case "mils":
+        return bwrObj.value * 0.0254
+        break;
+      default:
+        break; 
+    }
+    // If we get here something went wrong
+    alert("Not a valid BWR unit: " + bwrObj.unit );
+    return 0;
+  }
 
   function drawBox(x, y, boxWidth, boxHeight, colour) {
     x *= scale;
@@ -76,7 +101,7 @@ var BarcodeDrawer = (function () {
     if (! y) {
       y = vOffset;
     }
-    drawBox(hpos, y - (reduce/2), barWidth - (reduce/2), barHeight);
+    drawBox(hpos + (reduce/2), y, barWidth - reduce, barHeight);
   }
 
   function drawAddonBar(addonWidth) {
@@ -275,32 +300,32 @@ var BarcodeDrawer = (function () {
     return whiteBox;
   }
 
-  function bwrToMm( BWRI, DPI, SCALE ) {
-    // Bar Width Reduction in Inches at the scale it will be used
-    var scale = parseFloat(SCALE);
-    var bwris = (parseFloat(BWRI)/100) * scale;
+  function fitDPImm( VALUE_MM, DPI ) {
+    var value = parseFloat(VALUE_MM)/25.4; // Inches
     var dpi   = parseInt(DPI);
 
     var dotWidth = 1/dpi;
-    var dotCount = Math.floor( dpi * bwris );
+    var dotCount = Math.floor( dpi * value );
 
-    // Width reduction in whole dots (inches)
-    var bwrId = dotWidth * dotCount;
-    // Width reduction in whole dots (mm)
-    var bwrMm = bwrId * 25.4; // inch to mm
-    // returned scaled back value
-    return (bwrMm/scale) * 100;
+    var rasterSize = dotWidth * dotCount;
+    return rasterSize * 25.4; // in mm
   }
 
   function init( preset ) {
     // When any of these barcodes is at
     // its nominal or 100% size the width
     // of the narrowest bar or space is 0.33 mm
-    // scale = 0.33; // == 100%
-    var xDimensionPercent = 0.0033; // 1%
+
+    var moduleWidth = 0.33; //mm == 100%
+
+    // One percent of the the 100% size
+    var xDimension_1Percent = moduleWidth/100; // 0.0033; // 1%
+    var xDimension_scaled   = xDimension_1Percent * preset.scalePercent;
+    var xDimension_actual = fitDPImm( xDimension_scaled, preset.dpi);
+    var scalePercent = 100 + ((xDimension_actual-moduleWidth)/moduleWidth * 100);
     
-    // scale 0.33 == 100% // 0.264 == 80% 
-    scale = xDimensionPercent*preset.scalePercent;
+    scale = xDimension_1Percent*scalePercent;
+
     heightAdjustPercent = preset.heightPercent;
     vOffset = 5;
     if(preset.humanReadable) {
@@ -322,7 +347,7 @@ var BarcodeDrawer = (function () {
     addonHeight  = (addonHeight / 100) * heightAdjustPercent;
 
     // Gain control: Dependent on paper properties and dot distribution.
-    reduce = bwrToMm( preset.bwr, preset.dpi, preset.scalePercent ); // 10% dotgain == 0.1
+    reduce = getBWR_mm( preset.bwr, preset.dpi ); // 10% dotgain == 0.1
 
     startX = 10 + preset.addQuietZoneMargin;
     hpos = startX+0;
@@ -344,6 +369,9 @@ var BarcodeDrawer = (function () {
     init(preset);
     
     var size = getSize();
+    
+    //alert(JSON.stringify(size) );
+
     var startingpos = hpos - 7;
     
     doc = getCurrentOrNewDocument(preset, size);

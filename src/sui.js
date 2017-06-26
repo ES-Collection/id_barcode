@@ -79,12 +79,12 @@
     if( barcode_boxes.length > 0 ) {
       barcode_box = barcode_boxes[0];
       alignToOptions.push("barcode_box");
-      Pm.UiPreset.setProp(alignTo, "barcode_box");
+      Pm.UiPreset.setProp("alignTo", "barcode_box");
       var selectionParentPage = barcode_box.parentPage.name;
       // Let’s see which page contains selection
       for (var j=0; j<=list_of_pages.length-1; j++){
         if(list_of_pages[j] == selectionParentPage){
-          Pm.UiPreset.setProp(pageIndex, j);
+          Pm.UiPreset.setProp("pageIndex", j);
           break;
         }
       }
@@ -108,7 +108,7 @@
             // Let’s see which page contains selection
             for (var j=0; j<=list_of_pages.length-1; j++){
               if(list_of_pages[j] == selectionParentPage){
-                Pm.UiPreset.setProp(pageIndex, j);
+                Pm.UiPreset.setProp("pageIndex", j);
                 break;
               }
             }
@@ -572,31 +572,7 @@
     HumanRead_checkBox.onClick = function () {
       createFresh();
     }
-
-  function convertBWRtoInches( bwrValue, DPI, bwrUnit) {
-    switch( bwrUnit ) {
-      case 0: // dots
-        return 1 / parseInt(DPI);
-        break;
-      case 1: // milimeters
-        return parseFloat(bwrValue) / 25.4;
-        break;
-      case 2: // micron
-        return parseFloat(bwrValue) / 25400;
-        break;
-      case 3: // inch
-        return parseFloat(bwrValue);
-        break;
-      case 4: // mils
-        return parseFloat(bwrValue) / 1000;
-        break;
-      default:
-        break; 
-    }
-    // If we get here something went wrong
-    alert("Not a valid BWR unit: " + bwrUnit );
-    return bwrValue;
-  }
+  // End adjustment panel
 
   function getData(){
     // This function creates a new preset from UI data
@@ -613,13 +589,13 @@
     // Update Custom Settings
     NewPreset.codeFont       = codeFontSelect.getFont();
     NewPreset.readFont       = readFontSelect.getFont();
-    NewPreset.scalePercent   = scalePercent_editText.text.replace(/[^\d]+/g, '');
-    NewPreset.heightPercent  = heightPercent_editText.text.replace(/[^\d]+/g, '');
+    NewPreset.scalePercent   = parseFloat(scalePercent_editText.text);
+    NewPreset.heightPercent  = parseFloat(heightPercent_editText.text);
     NewPreset.whiteBox       = whiteBG_checkBox.value;
     NewPreset.qZoneIndicator = quiet_checkBox.value;
     NewPreset.humanReadable  = HumanRead_checkBox.value;
     NewPreset.dpi            = parseInt(dpi_editText.text);
-    NewPreset.bwr            = convertBWRtoInches( parseInt(bwr_editText.text), NewPreset.dpi, bwr_measureDrop.selection.index);
+    NewPreset.bwr            = {value: parseFloat(bwr_editText.text), unit: bwr_measureDrop.selection.text};
     NewPreset.alignTo        = alignTo_dropDown.selection.text;
     NewPreset.refPoint       = getSelectedReferencePoint();
     NewPreset.offset         = { x : parseFloat(offsetX_editText.text), y : parseFloat(offsetY_editText.text) };
@@ -632,6 +608,7 @@
 
   function renderData( p ) {
     userChange = false;
+
     try {
       // Set input
       // Don’t update EAN if there is allready in dialog
@@ -650,8 +627,8 @@
       quiet_checkBox.value          = p.qZoneIndicator;
       HumanRead_checkBox.value      = p.humanReadable;
       dpi_editText.text             = p.dpi;
-      bwr_editText.text             = p.bwr;
-      bwr_measureDrop.selection     = 3; // Data is saved in inches
+      bwr_editText.text             = p.bwr.value;
+      bwr_measureDrop.selection     = idUtil.find(bwrUnits,       p.bwr.unit);
       alignTo_dropDown.selection    = idUtil.find(alignToOptions, p.alignTo);
       setSelectedReferencePoint(p.refPoint);
       offsetX_editText.text         = String(p.offset.x);
@@ -729,6 +706,10 @@
       alert("Scale is outside target range.\nThe target size is 100% but the standards allow a range between 80% and 200%." );
       return showDialog(-1); // Restart
     }
+
+    // Check DPI and BWR values
+    //-------------------------
+    // Todo: 2345678909876543
 
     // Check Fonts
     //------------

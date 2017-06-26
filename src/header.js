@@ -1,4 +1,4 @@
-﻿/*
+﻿   /*
 
     +-+-+ +-+-+-+-+-+-+-+
     |I|d| |B|a|r|c|o|d|e|
@@ -51,10 +51,10 @@ var standardPreset = { name               : "Standard",
                        alignTo            : "Page Margins",
                        selectionBounds    : [0,0,0,0],
                        refPoint           : "BOTTOM_RIGHT_ANCHOR",
-                       offset             : { x : 0, y : 0 },
+                       offset             : { x: 0, y: 0 },
                        humanReadableStr   : "",
                        dpi                : 300,
-                       bwr                : 0.0035, // in inches: UI can convert from microns, milliinches (mil) and actual dots.
+                       bwr                : { value: 0, unit: "inch" }, // Unit can be "dots", "µm", "mm", "mils" and "inch"
                        createOulines      : true,
                        heightPercent      : 100,
                        scalePercent       : 80,
