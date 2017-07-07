@@ -1,4 +1,4 @@
-﻿/*
+﻿   /*
 
     +-+-+ +-+-+-+-+-+-+-+
     |I|d| |B|a|r|c|o|d|e|
@@ -51,8 +51,10 @@ var standardPreset = { name               : "Standard",
                        alignTo            : "Page Margins",
                        selectionBounds    : [0,0,0,0],
                        refPoint           : "BOTTOM_RIGHT_ANCHOR",
-                       offset             : { x : 0, y : 0 },
+                       offset             : { x: 0, y: 0 },
                        humanReadableStr   : "",
+                       dpi                : 300,
+                       bwr                : { value: 0, unit: "inch" }, // Unit can be "dots", "µm", "mm", "mils" and "inch"
                        createOulines      : true,
                        heightPercent      : 100,
                        scalePercent       : 80,
@@ -2906,6 +2908,7 @@ var Barcode = function () {
   var barcode_string;
   var addon_string;
   var stripped;
+  var pattern;
 
   function getNorm(bars) {
     var curr = bars[0];
@@ -2943,6 +2946,7 @@ var Barcode = function () {
         if ( !checkCheckDigit(stripped) ) {
           throw "Check digit incorrect";
         }
+        pattern = ean13_pattern[stripped[0]];
       }
 
       if (addonStr) {
@@ -3060,7 +3064,18 @@ var Barcode = function () {
 *
 */
 
-var pattern = ['L', 'G', 'G', 'L', 'G', 'L', 'R', 'R', 'R', 'R', 'R', 'R'];
+var ean13_pattern = [
+  ['L', 'L', 'L', 'L', 'L', 'L', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'L', 'G', 'L', 'G', 'G', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'L', 'G', 'G', 'L', 'G', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'L', 'G', 'G', 'G', 'L', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'G', 'L', 'L', 'G', 'G', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'G', 'G', 'L', 'L', 'G', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'G', 'G', 'G', 'L', 'L', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'G', 'L', 'G', 'L', 'G', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'G', 'L', 'G', 'G', 'L', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'G', 'G', 'L', 'G', 'L', 'R', 'R', 'R', 'R', 'R', 'R']
+];
 
 var addon_pattern = [
   ['G', 'G', 'L', 'L', 'L'],
@@ -3241,6 +3256,8 @@ function FontSelect(group, font, resetPresetDropdown) {
   // Start ExtendScript Preset Manager
   var Pm = new presetManager("EAN13_barcode_Settings.json", standardPresets);
 
+  var bwrUnits = ['dots', 'mm', 'µm', 'inch', 'mils'];
+
   /*
       Try and load extra presets from active document
   */
@@ -3313,12 +3330,12 @@ function FontSelect(group, font, resetPresetDropdown) {
     if( barcode_boxes.length > 0 ) {
       barcode_box = barcode_boxes[0];
       alignToOptions.push("barcode_box");
-      Pm.UiPreset.setProp(alignTo, "barcode_box");
+      Pm.UiPreset.setProp("alignTo", "barcode_box");
       var selectionParentPage = barcode_box.parentPage.name;
       // Let’s see which page contains selection
       for (var j=0; j<=list_of_pages.length-1; j++){
         if(list_of_pages[j] == selectionParentPage){
-          Pm.UiPreset.setProp(pageIndex, j);
+          Pm.UiPreset.setProp("pageIndex", j);
           break;
         }
       }
@@ -3342,7 +3359,7 @@ function FontSelect(group, font, resetPresetDropdown) {
             // Let’s see which page contains selection
             for (var j=0; j<=list_of_pages.length-1; j++){
               if(list_of_pages[j] == selectionParentPage){
-                Pm.UiPreset.setProp(pageIndex, j);
+                Pm.UiPreset.setProp("pageIndex", j);
                 break;
               }
             }
@@ -3366,6 +3383,14 @@ function FontSelect(group, font, resetPresetDropdown) {
   dialog.orientation = 'column';
   dialog.alignChildren = 'left';
   dialog.margins = [15,10,15,20];
+
+  function NaN20(num){
+      if(isNaN(num)){
+          return 0;
+      } else {
+          return num;
+      }
+  }
 
   function createFresh() {
     if(userChange) {
@@ -3671,7 +3696,6 @@ function FontSelect(group, font, resetPresetDropdown) {
   optionPanel.alignChildren = "top";
   optionPanel.orientation = 'column';
   
-
   var alignTo_dropDown = optionPanel.add("dropdownlist", undefined, alignToOptions);
   alignTo_dropDown.selection = idUtil.find( alignToOptions, Pm.UiPreset.getProp('alignTo') );
 
@@ -3711,17 +3735,22 @@ function FontSelect(group, font, resetPresetDropdown) {
   ////////////////////////////
   // Start Adjustment panel //
   ////////////////////////////
+  var tab = 50;
+
   var adjustPanel = extraoptionsPanel.add("panel", undefined, "Adjustments");
       adjustPanel.margins = 20;
       adjustPanel.alignment = "fill";
       adjustPanel.alignChildren = "left";
       adjustPanel.orientation = 'column';
 
+    //-------------------
+
     var heightAdjust = adjustPanel.add('group');
-        heightAdjust.add('statictext', undefined, 'Height adjustment:');
+    var heightLabel  = heightAdjust.add('statictext', undefined, 'Height:');
+        heightLabel.minimumSize.width = tab;
 
     var heightPercent_editText = heightAdjust.add('edittext', undefined, Pm.UiPreset.getProp('heightPercent') );
-    heightPercent_editText.characters = 4;
+        heightPercent_editText.characters = 7;
     heightPercent_editText.onChange = function () {
       heightPercent_editText.text = String(parseFloat(heightPercent_editText.text));
       createFresh();
@@ -3729,17 +3758,53 @@ function FontSelect(group, font, resetPresetDropdown) {
     
     heightAdjust.add('statictext', undefined, '%');
     
+    //-------------------
+
     var scaleAdjust = adjustPanel.add('group');
-        scaleAdjust.add('statictext', undefined, 'Scale:');
-    
+    var scaleLabel  = scaleAdjust.add('statictext', undefined, 'Scale:');
+        scaleLabel.minimumSize.width = tab;
+
     var scalePercent_editText = scaleAdjust.add('edittext', undefined, Pm.UiPreset.getProp('scalePercent') );
-    scalePercent_editText.characters = 4;
-    scalePercent_editText.onChange = function () {
-      scalePercent_editText.text = String(scalePercent_editText.text);
-      createFresh();
-    };
+        scalePercent_editText.characters = 7;
+        scalePercent_editText.onChange = function () {
+          scalePercent_editText.text = NaN20(parseFloat(scalePercent_editText.text));
+          createFresh();
+        };
     
     scaleAdjust.add('statictext', undefined, '%');
+
+    //-------------------
+
+    var dpiAdjust = adjustPanel.add('group');
+    var dpiLabel  = dpiAdjust.add('statictext', undefined, 'Output:');
+        dpiLabel.minimumSize.width = tab;
+    
+    var dpi_editText = dpiAdjust.add('edittext', undefined, Pm.UiPreset.getProp('dpi') );
+        dpi_editText.characters = 7;
+        dpi_editText.onChange = function () {
+          dpi_editText.text = NaN20(parseInt(dpi_editText.text));
+          createFresh();
+        };
+
+    dpiAdjust.add('statictext', undefined, 'DPI');
+
+    //-------------------
+
+    var bwrAdjust = adjustPanel.add('group');
+    var bwrLabel  = bwrAdjust.add('statictext', undefined, 'BWR:');
+        bwrLabel.minimumSize.width = tab;
+    
+    var bwr_editText = bwrAdjust.add('edittext', undefined, Pm.UiPreset.getProp('bwr') );
+        bwr_editText.characters = 7;
+        bwr_editText.onChange = function () {
+          bwr_editText.text = NaN20(parseFloat(bwr_editText.text));
+          createFresh();
+        };
+
+    var bwr_measureDrop = bwrAdjust.add("dropdownlist", undefined, bwrUnits);
+        bwr_measureDrop.selection = 3; // inch
+
+    //-------------------
     
     var whiteBG_checkBox = adjustPanel.add ("checkbox", undefined, "White background");
     whiteBG_checkBox.value = Pm.UiPreset.getProp('whiteBox');
@@ -3758,7 +3823,8 @@ function FontSelect(group, font, resetPresetDropdown) {
     HumanRead_checkBox.onClick = function () {
       createFresh();
     }
-  
+  // End adjustment panel
+
   function getData(){
     // This function creates a new preset from UI data
     try {
@@ -3774,11 +3840,13 @@ function FontSelect(group, font, resetPresetDropdown) {
     // Update Custom Settings
     NewPreset.codeFont       = codeFontSelect.getFont();
     NewPreset.readFont       = readFontSelect.getFont();
-    NewPreset.scalePercent   = scalePercent_editText.text.replace(/[^\d]+/g, '');
-    NewPreset.heightPercent  = heightPercent_editText.text.replace(/[^\d]+/g, '');
+    NewPreset.scalePercent   = parseFloat(scalePercent_editText.text);
+    NewPreset.heightPercent  = parseFloat(heightPercent_editText.text);
     NewPreset.whiteBox       = whiteBG_checkBox.value;
     NewPreset.qZoneIndicator = quiet_checkBox.value;
     NewPreset.humanReadable  = HumanRead_checkBox.value;
+    NewPreset.dpi            = parseInt(dpi_editText.text);
+    NewPreset.bwr            = {value: parseFloat(bwr_editText.text), unit: bwr_measureDrop.selection.text};
     NewPreset.alignTo        = alignTo_dropDown.selection.text;
     NewPreset.refPoint       = getSelectedReferencePoint();
     NewPreset.offset         = { x : parseFloat(offsetX_editText.text), y : parseFloat(offsetY_editText.text) };
@@ -3791,6 +3859,7 @@ function FontSelect(group, font, resetPresetDropdown) {
 
   function renderData( p ) {
     userChange = false;
+
     try {
       // Set input
       // Don’t update EAN if there is allready in dialog
@@ -3808,6 +3877,9 @@ function FontSelect(group, font, resetPresetDropdown) {
       whiteBG_checkBox.value        = p.whiteBox;
       quiet_checkBox.value          = p.qZoneIndicator;
       HumanRead_checkBox.value      = p.humanReadable;
+      dpi_editText.text             = p.dpi;
+      bwr_editText.text             = p.bwr.value;
+      bwr_measureDrop.selection     = idUtil.find(bwrUnits,       p.bwr.unit);
       alignTo_dropDown.selection    = idUtil.find(alignToOptions, p.alignTo);
       setSelectedReferencePoint(p.refPoint);
       offsetX_editText.text         = String(p.offset.x);
@@ -3886,6 +3958,10 @@ function FontSelect(group, font, resetPresetDropdown) {
       return showDialog(-1); // Restart
     }
 
+    // Check DPI and BWR values
+    //-------------------------
+    // Todo: 2345678909876543
+
     // Check Fonts
     //------------
     if( (preset.readFont == null) || (preset.codeFont == null) ){
@@ -3917,7 +3993,7 @@ function FontSelect(group, font, resetPresetDropdown) {
 
 // END barcode_ui.js
 
-﻿// Start BarcodeDrawer
+// Start BarcodeDrawer
 var BarcodeDrawer = (function () {
   var doc;
   var originalRulers;
@@ -3932,14 +4008,29 @@ var BarcodeDrawer = (function () {
   var vOffset;
   var presetString;
 
-  function drawLine(x1, y1, x2, y2) {
-    x1 *= scale;
-    y1 *= scale;
-    x2 *= scale;
-    y2 *= scale;
-    var pathPoints = page.graphicLines.add().paths[0].pathPoints;
-    pathPoints[0].anchor = [x1, y1];
-    pathPoints[1].anchor = [x2, y2];
+  function getBWR_mm( bwrObj, DPI ) {
+    switch( bwrObj.unit ) {
+      case "dots":
+        return ((1 / parseInt(DPI)) * bwrObj.value ) * 25.4;
+        break;
+      case "mm":
+        return bwrObj.value;
+        break;
+      case "µm":
+        return bwrObj.value * 0.001
+        break;
+      case "inch":
+        return bwrObj.value * 25.4;
+        break;
+      case "mils":
+        return bwrObj.value * 0.0254
+        break;
+      default:
+        break; 
+    }
+    // If we get here something went wrong
+    alert("Not a valid BWR unit: " + bwrObj.unit );
+    return 0;
   }
 
   function drawBox(x, y, boxWidth, boxHeight, colour) {
@@ -4005,7 +4096,7 @@ var BarcodeDrawer = (function () {
     if (! y) {
       y = vOffset;
     }
-    drawBox(hpos, y, barWidth - reduce, barHeight);
+    drawBox(hpos + (reduce/2), y, barWidth - reduce, barHeight);
   }
 
   function drawAddonBar(addonWidth) {
@@ -4204,15 +4295,32 @@ var BarcodeDrawer = (function () {
     return whiteBox;
   }
 
+  function fitDPImm( VALUE_MM, DPI ) {
+    var value = parseFloat(VALUE_MM)/25.4; // Inches
+    var dpi   = parseInt(DPI);
+
+    var dotWidth = 1/dpi;
+    var dotCount = Math.floor( dpi * value );
+
+    var rasterSize = dotWidth * dotCount;
+    return rasterSize * 25.4; // in mm
+  }
+
   function init( preset ) {
     // When any of these barcodes is at
     // its nominal or 100% size the width
     // of the narrowest bar or space is 0.33 mm
-    // scale = 0.33; // == 100%
-    var xDimensionPercent = 0.0033;
+
+    var moduleWidth = 0.33; //mm == 100%
+
+    // One percent of the the 100% size
+    var xDimension_1Percent = moduleWidth/100; // 0.0033; // 1%
+    var xDimension_scaled   = xDimension_1Percent * preset.scalePercent;
+    var xDimension_actual = fitDPImm( xDimension_scaled, preset.dpi);
+    var scalePercent = 100 + ((xDimension_actual-moduleWidth)/moduleWidth * 100);
     
-    // scale 0.33 == 100% // 0.264 == 80% // 0.31 Penguin
-    scale = xDimensionPercent*preset.scalePercent;
+    scale = xDimension_1Percent*scalePercent;
+
     heightAdjustPercent = preset.heightPercent;
     vOffset = 5;
     if(preset.humanReadable) {
@@ -4233,9 +4341,9 @@ var BarcodeDrawer = (function () {
     guardHeight  = (guardHeight / 100) * heightAdjustPercent;
     addonHeight  = (addonHeight / 100) * heightAdjustPercent;
 
-    // Gain control: Dependent on paper properties and dot distribution. Best to leave to CtP process.
-    reduce = 0; // 10% dotgain == 0.1
-    
+    // Gain control: Dependent on paper properties and dot distribution.
+    reduce = getBWR_mm( preset.bwr, preset.dpi ); // 10% dotgain == 0.1
+
     startX = 10 + preset.addQuietZoneMargin;
     hpos = startX+0;
     width += (preset.addQuietZoneMargin*2);
@@ -4256,6 +4364,9 @@ var BarcodeDrawer = (function () {
     init(preset);
     
     var size = getSize();
+    
+    //alert(JSON.stringify(size) );
+
     var startingpos = hpos - 7;
     
     doc = getCurrentOrNewDocument(preset, size);

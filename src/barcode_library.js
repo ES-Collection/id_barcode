@@ -115,6 +115,7 @@ var Barcode = function () {
   var barcode_string;
   var addon_string;
   var stripped;
+  var pattern;
 
   function getNorm(bars) {
     var curr = bars[0];
@@ -152,6 +153,7 @@ var Barcode = function () {
         if ( !checkCheckDigit(stripped) ) {
           throw "Check digit incorrect";
         }
+        pattern = ean13_pattern[stripped[0]];
       }
 
       if (addonStr) {
@@ -269,7 +271,18 @@ var Barcode = function () {
 *
 */
 
-var pattern = ['L', 'G', 'G', 'L', 'G', 'L', 'R', 'R', 'R', 'R', 'R', 'R'];
+var ean13_pattern = [
+  ['L', 'L', 'L', 'L', 'L', 'L', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'L', 'G', 'L', 'G', 'G', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'L', 'G', 'G', 'L', 'G', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'L', 'G', 'G', 'G', 'L', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'G', 'L', 'L', 'G', 'G', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'G', 'G', 'L', 'L', 'G', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'G', 'G', 'G', 'L', 'L', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'G', 'L', 'G', 'L', 'G', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'G', 'L', 'G', 'G', 'L', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'G', 'G', 'L', 'G', 'L', 'R', 'R', 'R', 'R', 'R', 'R']
+];
 
 var addon_pattern = [
   ['G', 'G', 'L', 'L', 'L'],
