@@ -1,8 +1,7 @@
 ﻿   /*
 
-    +-+-+ +-+-+-+-+-+-+-+
     |I|d| |B|a|r|c|o|d|e|
-    +-+-+ +-+-+-+-+-+-+-+
+
     An InDesign script for creating EAN-13 barcodes
 
     https://github.com/GitBruno/id_barcode
@@ -43,8 +42,8 @@ var standardPreset = { name               : "Standard",
                        pageIndex          : -1,
                        ean                : "",
                        addon              : "",
-                       codeFont           : "OCR B Std\tRegular",
-                       readFont           : "OCR B Std\tRegular", // Setting tracking to -100 is nice for this font
+                       codeFont           : "OCR BARCODE\tRegular",
+                       readFont           : "OCR BARCODE\tRegular",
                        readFontTracking   : 0,
                        whiteBox           : true,
                        humanReadable      : true,
@@ -54,7 +53,7 @@ var standardPreset = { name               : "Standard",
                        offset             : { x: 0, y: 0 },
                        humanReadableStr   : "",
                        dpi                : 300,
-                       bwr                : { value: 0, unit: "inch" }, // Unit can be "dots", "µm", "mm", "mils" and "inch"
+                       bwr                : { value: 0, unit: "inch" },
                        createOulines      : true,
                        heightPercent      : 100,
                        scalePercent       : 80,
@@ -73,7 +72,7 @@ var standardPresets = [standardPreset];
 
     Bruno Herfst 2017
 
-    Version 1.0
+    Version 1.1
     
     MIT license (MIT)
     
@@ -123,6 +122,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         function createTemplate() {
             var newTemplate = new Object();
             for(var k in TemplatePreset) newTemplate[k]=TemplatePreset[k];
+            newTemplate.temporaryPreset = false;
             return newTemplate;
         }
         return {
@@ -316,6 +316,24 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
             return holder;
         }
 
+        function removeTemporaryPresets( cleanPresets ){
+            // This function removes any temporary preset before saving to disk
+            var holder = new Array();
+            var len = cleanPresets.length;
+            for (var i = 0; i < len; i++) {
+                if ( cleanPresets[i].hasOwnProperty( "temporaryPreset" ) ) {
+                    if( cleanPresets[i].temporaryPreset == false ) {
+                        delete cleanPresets[i].temporaryPreset;
+                        holder.push( cleanPresets[i] );
+                    }
+                } else {
+                    holder.push( cleanPresets[i] );
+                }
+            }
+
+            return holder;
+        }
+
         function presetExist( key, val ) {
             var len = _Presets.length;
             for (var i = len-1; i >= 0; i--) {
@@ -503,7 +521,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         }
 
         PresetsController.saveToDisk  = function ( ) {
-            var presetStr = JSON.stringify( clean() );
+            var presetStr = JSON.stringify( removeTemporaryPresets( clean() ));
             return writeFile(filePath, presetStr);
         }
 
@@ -651,7 +669,11 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         }
 
         WidgetCreator.saveLastUsed = function() {
-            WidgetCreator.overwritePreset( listKey, lastUsedPresetName, {position: -1} );
+            try {
+                WidgetCreator.overwritePreset( listKey, lastUsedPresetName, {position: -1} );
+            } catch ( err ) {
+                alert(err)
+            }
             return Espm.UiPreset.get();
         }
 
@@ -2825,9 +2847,8 @@ var checkCheckDigit = function(str) {
             check = 'X';
         }
         return (check == str[str.length-1].toUpperCase());
-    }
-    
-    if (str.length == 10 || str.length == 8) {
+
+    } else if (str.length == 10 || str.length == 8) {
         // ISBN-10 or unpadded ISSN
         len = str.length-1;
         weight = str.length;
@@ -2842,14 +2863,10 @@ var checkCheckDigit = function(str) {
             check = 'X';
         }
         return (check == str[str.length-1].toUpperCase());
+
+    } else {
+      throw("Can't check digit: Wrong number count.");
     }
-
-
-      sum = (11 - sum % 11) % 11;
-      return sum === 10 ? 'X' : String(c);
-
-
-    return false;
 }
 
 function calculateCheckDigit(ean) {
@@ -2869,29 +2886,12 @@ function calculateCheckDigit(ean) {
       for (n = 0; n < 12; n += 2) {
         c += Number(ean.charAt(n)) + 3 * ean.charAt(n + 1);
       }
-
-      //return String((10 - c % 10) % 10);
       c = (10 - c % 10) % 10;
       return c === 10 ? 'X' : String(c);
     
     } else if (ean.match(/^\d{7}[\dX]?$/)) {
       //ISSN-8
-      /* Wrongly stated on http://www.issn.org/understanding-the-issn/issn-uses/identification-with-the-ean-13-barcode/
-      c = 0;
-      for (n = 0; n < 7; n++) {
-        d = Number(ean.charAt(n));
-        if (i % 2 == 1) {
-            // odd
-            c += 3*d;
-        } else {
-            // even
-            c += d;
-        }
-      }
-      c = 10 - (c % 10);
-      return c === 10 ? 'X' : String(c);
-      */
-      // Wikipedia is right for a change: https://en.wikipedia.org/wiki/International_Standard_Serial_Number
+      // https://en.wikipedia.org/wiki/International_Standard_Serial_Number
       c = 0;
       for (n = 0; n < 7; n += 1) {
         c += (8 - n) * ean.charAt(n);
@@ -3306,15 +3306,20 @@ function FontSelect(group, font, resetPresetDropdown) {
       for (i = 0; i < existingBarcodes.length; i++) { 
         var eBarcodePreset = getBarcodePreset(existingBarcodes[i]);
         if( eBarcodePreset ) {
-            eBarcodePreset.name = "["+ eBarcodePreset.ean +"]";
+            eBarcodePreset.name = "[ "+ eBarcodePreset.ean +" ]";
             eBarcodePreset = updatePageNumber( eBarcodePreset );
+            // Tag preset so it will not be saved to disk
+            eBarcodePreset.temporaryPreset = true;
             Pm.Presets.add(eBarcodePreset, 0);
         }
       }
     } else {
       // Only go through this routine if there are no barcode settings found
       var activeDocPreset      = Pm.Presets.getTemplate();
-          activeDocPreset.name = "[Active Document]";
+          activeDocPreset.name = "[ Active Document ]";
+          // Tag preset so it will not be saved to disk
+          activeDocPreset.temporaryPreset = true;
+
       // Check if there is an entry for EAN
       var tempData = activeDoc.extractLabel('EAN');
       if( tempData.length > 0 ){

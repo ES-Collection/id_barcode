@@ -56,6 +56,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         function createTemplate() {
             var newTemplate = new Object();
             for(var k in TemplatePreset) newTemplate[k]=TemplatePreset[k];
+            newTemplate.temporaryPreset = false;
             return newTemplate;
         }
         return {
@@ -256,6 +257,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
             for (var i = 0; i < len; i++) {
                 if ( cleanPresets[i].hasOwnProperty( "temporaryPreset" ) ) {
                     if( cleanPresets[i].temporaryPreset == false ) {
+                        delete cleanPresets[i].temporaryPreset;
                         holder.push( cleanPresets[i] );
                     }
                 } else {
