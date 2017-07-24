@@ -6,7 +6,7 @@
 
     Bruno Herfst 2017
 
-    Version 1.0
+    Version 1.1
     
     MIT license (MIT)
     
@@ -249,6 +249,23 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
             return holder;
         }
 
+        function removeTemporaryPresets( cleanPresets ){
+            // This function removes any temporary preset before saving to disk
+            var holder = new Array();
+            var len = cleanPresets.length;
+            for (var i = 0; i < len; i++) {
+                if ( cleanPresets[i].hasOwnProperty( "temporaryPreset" ) ) {
+                    if( cleanPresets[i].temporaryPreset == false ) {
+                        holder.push( cleanPresets[i] );
+                    }
+                } else {
+                    holder.push( cleanPresets[i] );
+                }
+            }
+
+            return holder;
+        }
+
         function presetExist( key, val ) {
             var len = _Presets.length;
             for (var i = len-1; i >= 0; i--) {
@@ -436,7 +453,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         }
 
         PresetsController.saveToDisk  = function ( ) {
-            var presetStr = JSON.stringify( clean() );
+            var presetStr = JSON.stringify( removeTemporaryPresets( clean() ));
             return writeFile(filePath, presetStr);
         }
 
@@ -584,7 +601,11 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         }
 
         WidgetCreator.saveLastUsed = function() {
-            WidgetCreator.overwritePreset( listKey, lastUsedPresetName, {position: -1} );
+            try {
+                WidgetCreator.overwritePreset( listKey, lastUsedPresetName, {position: -1} );
+            } catch ( err ) {
+                alert(err)
+            }
             return Espm.UiPreset.get();
         }
 

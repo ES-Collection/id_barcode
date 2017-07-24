@@ -1,8 +1,7 @@
 ﻿   /*
 
-    +-+-+ +-+-+-+-+-+-+-+
     |I|d| |B|a|r|c|o|d|e|
-    +-+-+ +-+-+-+-+-+-+-+
+
     An InDesign script for creating EAN-13 barcodes
 
     https://github.com/GitBruno/id_barcode
@@ -43,8 +42,8 @@ var standardPreset = { name               : "Standard",
                        pageIndex          : -1,
                        ean                : "",
                        addon              : "",
-                       codeFont           : "OCR B Std\tRegular",
-                       readFont           : "OCR B Std\tRegular", // Setting tracking to -100 is nice for this font
+                       codeFont           : "OCR BARCODE\tRegular",
+                       readFont           : "OCR BARCODE\tRegular",
                        readFontTracking   : 0,
                        whiteBox           : true,
                        humanReadable      : true,
@@ -54,7 +53,7 @@ var standardPreset = { name               : "Standard",
                        offset             : { x: 0, y: 0 },
                        humanReadableStr   : "",
                        dpi                : 300,
-                       bwr                : { value: 0, unit: "inch" }, // Unit can be "dots", "µm", "mm", "mils" and "inch"
+                       bwr                : { value: 0, unit: "inch" },
                        createOulines      : true,
                        heightPercent      : 100,
                        scalePercent       : 80,

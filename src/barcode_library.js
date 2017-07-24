@@ -32,9 +32,8 @@ var checkCheckDigit = function(str) {
             check = 'X';
         }
         return (check == str[str.length-1].toUpperCase());
-    }
-    
-    if (str.length == 10 || str.length == 8) {
+
+    } else if (str.length == 10 || str.length == 8) {
         // ISBN-10 or unpadded ISSN
         len = str.length-1;
         weight = str.length;
@@ -49,14 +48,10 @@ var checkCheckDigit = function(str) {
             check = 'X';
         }
         return (check == str[str.length-1].toUpperCase());
+
+    } else {
+      throw("Can't check digit: Wrong number count.");
     }
-
-
-      sum = (11 - sum % 11) % 11;
-      return sum === 10 ? 'X' : String(c);
-
-
-    return false;
 }
 
 function calculateCheckDigit(ean) {
@@ -76,29 +71,12 @@ function calculateCheckDigit(ean) {
       for (n = 0; n < 12; n += 2) {
         c += Number(ean.charAt(n)) + 3 * ean.charAt(n + 1);
       }
-
-      //return String((10 - c % 10) % 10);
       c = (10 - c % 10) % 10;
       return c === 10 ? 'X' : String(c);
     
     } else if (ean.match(/^\d{7}[\dX]?$/)) {
       //ISSN-8
-      /* Wrongly stated on http://www.issn.org/understanding-the-issn/issn-uses/identification-with-the-ean-13-barcode/
-      c = 0;
-      for (n = 0; n < 7; n++) {
-        d = Number(ean.charAt(n));
-        if (i % 2 == 1) {
-            // odd
-            c += 3*d;
-        } else {
-            // even
-            c += d;
-        }
-      }
-      c = 10 - (c % 10);
-      return c === 10 ? 'X' : String(c);
-      */
-      // Wikipedia is right for a change: https://en.wikipedia.org/wiki/International_Standard_Serial_Number
+      // https://en.wikipedia.org/wiki/International_Standard_Serial_Number
       c = 0;
       for (n = 0; n < 7; n += 1) {
         c += (8 - n) * ean.charAt(n);

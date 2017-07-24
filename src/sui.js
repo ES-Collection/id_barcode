@@ -55,15 +55,20 @@
       for (i = 0; i < existingBarcodes.length; i++) { 
         var eBarcodePreset = getBarcodePreset(existingBarcodes[i]);
         if( eBarcodePreset ) {
-            eBarcodePreset.name = "["+ eBarcodePreset.ean +"]";
+            eBarcodePreset.name = "[ "+ eBarcodePreset.ean +" ]";
             eBarcodePreset = updatePageNumber( eBarcodePreset );
+            // Tag preset so it will not be saved to disk
+            eBarcodePreset.temporaryPreset = true;
             Pm.Presets.add(eBarcodePreset, 0);
         }
       }
     } else {
       // Only go through this routine if there are no barcode settings found
       var activeDocPreset      = Pm.Presets.getTemplate();
-          activeDocPreset.name = "[Active Document]";
+          activeDocPreset.name = "[ Active Document ]";
+          // Tag preset so it will not be saved to disk
+          activeDocPreset.temporaryPreset = true;
+
       // Check if there is an entry for EAN
       var tempData = activeDoc.extractLabel('EAN');
       if( tempData.length > 0 ){
