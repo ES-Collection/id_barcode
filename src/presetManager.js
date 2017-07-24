@@ -56,7 +56,6 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         function createTemplate() {
             var newTemplate = new Object();
             for(var k in TemplatePreset) newTemplate[k]=TemplatePreset[k];
-            newTemplate.temporaryPreset = false;
             return newTemplate;
         }
         return {
@@ -172,6 +171,8 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         // Create a fresh template
         var _Preset = Template.getInstance();
 
+        var temporaryState = false;
+
         var _hasProp = function( propName ) {
             if( _Preset.hasOwnProperty( propName ) ){
                 return true;
@@ -183,7 +184,16 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
 
         // Public
         //-------
-        presetController.getTemplate = function() {
+        PresetController.setTemporaryState = function( bool ) {
+            temporaryState = bool == true;
+            return temporaryState;
+        }
+
+        PresetController.getTemporaryState = function( bool ) {
+            return temporaryState;
+        }
+
+        PresetController.getTemplate = function() {
             return Template.getInstance();
         }
 
@@ -250,21 +260,15 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
             return holder;
         }
 
-        function removeTemporaryPresets( cleanPresets ){
+        function cleanSave_presets(){
             // This function removes any temporary preset before saving to disk
             var holder = new Array();
-            var len = cleanPresets.length;
+            var len = _Presets.length;
             for (var i = 0; i < len; i++) {
-                if ( cleanPresets[i].hasOwnProperty( "temporaryPreset" ) ) {
-                    if( cleanPresets[i].temporaryPreset == false ) {
-                        delete cleanPresets[i].temporaryPreset;
-                        holder.push( cleanPresets[i] );
-                    }
-                } else {
-                    holder.push( cleanPresets[i] );
+                if(! _Presets[i].getTemporaryState() ) {
+                    holder.push( _Presets[i].get() );
                 }
             }
-
             return holder;
         }
 
@@ -369,21 +373,31 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
             return clean();
         }
 
-        PresetsController.add = function ( preset, position ) {
+        PresetsController.add = function ( preset, options ) {
+            // options { position: integer, temporary preset: boolean }
             // para position; index that can handle negative numbers
             // that are calculated from the back -1 == last
+
             var len = _Presets.length;
-            // Not a number
-            if ( isNaN(position) ) {
-                position = len;
+            var pos = len;
+
+            if(options && options.hasOwnProperty('position')) {
+                pos = options.position;
+                if ( isNaN(pos) ) {
+                    pos = len;
+                }
+                if( outOfRange(pos, len) ) {
+                    pos = len;
+                }
             }
 
-            if( outOfRange(position, len) ) {
-                position = len;
-            }
-            
-            var i = calcIndex( position, len+1 );
+            var i = calcIndex( pos, len+1 );
             var infusedPreset = new presetController( preset );
+
+            if(options && options.hasOwnProperty('temporary')) {
+                infusedPreset.setTemporaryState( options.temporary == true );
+            }
+
             _Presets.splice(i, 0, infusedPreset);
 
             return clean();
@@ -416,7 +430,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
             }
 
             var newLen = _Presets.length+1;
-            PresetsController.add( Preset, position );
+            PresetsController.add( Preset, {position: position} );
 
             return _Presets.length == newLen;
         }
@@ -435,7 +449,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         
         PresetsController.overwriteIndex = function ( position, Preset ) {
             PresetsController.remove( position );
-            PresetsController.add( Preset, position );
+            PresetsController.add( Preset, {position: position} );
             return clean();
         }
 
@@ -455,7 +469,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         }
 
         PresetsController.saveToDisk  = function ( ) {
-            var presetStr = JSON.stringify( removeTemporaryPresets( clean() ));
+            var presetStr = JSON.stringify( cleanSave_presets() );
             return writeFile(filePath, presetStr);
         }
 
@@ -761,7 +775,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
     // Extend presetController UiPreset
     Espm.UiPreset.save = function( position ) {
         // position or index, negative numbers are calculated from the back -1 == last
-        return Espm.Presets.add( Espm.UiPreset.get(), position );
+        return Espm.Presets.add( Espm.UiPreset.get(), {position: position} );
     }
 
     Espm.UiPreset.loadIndex = function ( index ) {

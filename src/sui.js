@@ -57,9 +57,8 @@
         if( eBarcodePreset ) {
             eBarcodePreset.name = "[ "+ eBarcodePreset.ean +" ]";
             eBarcodePreset = updatePageNumber( eBarcodePreset );
-            // Tag preset so it will not be saved to disk
-            eBarcodePreset.temporaryPreset = true;
-            Pm.Presets.add(eBarcodePreset, 0);
+            // Temporary preset so it will not be saved to disk
+            Pm.Presets.add(eBarcodePreset, {position: 0, temporary: true} );
         }
       }
     } else {
@@ -76,7 +75,7 @@
         activeDocPreset = updatePageNumber( activeDocPreset );
       }
       // Save
-      Pm.Presets.add(activeDocPreset, 0);
+      Pm.Presets.add(activeDocPreset, {position: 0, temporary: true});
     } // End existing barcodes
 
     // see if there is a barcode box on active spread
