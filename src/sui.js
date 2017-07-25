@@ -156,16 +156,20 @@
   //-------------
   var input = dialog.add('panel', undefined, 'New Barcode: ');
   
-  function updateEANTypeTo( EAN13_type ){
+  function updateEANTypeTo( EAN13_type, details ){
     var t = String( EAN13_type );
-    if( t == "EAN-13" ) t = "Unknown";
-    var r = "EAN-13";
-    if( t.length > 0 ) {
-      r += " [ " + t + " ]";
+    if(t.toLowerCase() == "unknown") {
+      details = "Unknown";
+      t = "EAN-13";
     }
-    input.text = r + ":";
+    if (typeof details === 'string' || details instanceof String) {
+      if( details.length > 0 ) {
+        t += " [ " + details + " ]";
+      }
+    }
+    input.text = t;
   }
-  
+
   input.margins = [10,20,10,20];
   input.alignment = "fill";
   input.alignChildren = "left";
@@ -176,7 +180,7 @@
   eanInput.active = true;
   eanInput.text = Pm.UiPreset.getProp('ean');
 
-  eanInput.onChange = function () {
+  function checkEanInput() {
     var digits = eanInput.text.replace(/[^\dXx]+/g, '');
     if (digits.length == 8) {
       // ISSN
@@ -194,7 +198,7 @@
       }
       if ( ean && ean.isIsbn10() ) {
           eanInput.text = ISBN.hyphenate(digits);
-          updateEANTypeTo("ISBN");
+          updateEANTypeTo("ISBN", ean.getGroupRecord(digits.substring(3, 13)).record.name );
           return;
       }
       return;
@@ -246,7 +250,7 @@
         }
         if ( ean && ean.isIsbn13() ) {
             eanInput.text = ISBN.hyphenate(digits);
-            updateEANTypeTo("ISBN");
+            updateEANTypeTo("ISBN", ean.getGroupRecord(digits.substring(3, 13)).record.name );
             return;
         }
       }
@@ -254,9 +258,13 @@
     } // End digits length == 13
 
     // note returned yet...
-    updateEANTypeTo("EAN-13");
+    updateEANTypeTo("Unknown");
     eanInput.text = eanInput.text.replace(/ +/g, "-");
     eanInput.text = eanInput.text.replace(/[^\dxX-]*/g, "").toUpperCase();
+  }
+
+  eanInput.onChange = function () {
+    checkEanInput();
   }
 
   input.add('statictext', undefined, 'Addon (optional):');
@@ -640,6 +648,7 @@
       if( pageSelect_dropDown.visible ) {
         pageSelect_dropDown.selection = p.pageIndex;
       }
+      checkEanInput();
     } catch (err) {
       alert("Error loading presets: " + err);
     }
