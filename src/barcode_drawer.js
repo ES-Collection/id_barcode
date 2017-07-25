@@ -44,6 +44,7 @@ var BarcodeDrawer = (function () {
     boxWidth *= scale;
     boxHeight *= scale;
     var rect = page.rectangles.add();
+    rect.appliedObjectStyle = doc.objectStyles.item(0);
     rect.strokeWeight = 0;
     rect.strokeColor = "None";
     rect.fillColor = colour || "Black";
@@ -248,6 +249,7 @@ var BarcodeDrawer = (function () {
       boxWidth *= scale;
       boxHeight *= scale;
       var textBox = page.textFrames.add();
+      textBox.appliedObjectStyle = doc.objectStyles.item(0);
       textBox.contents = text;
       textBox.textFramePreferences.verticalJustification = frameAlign;
       var textStyle = textBox.textStyleRanges[0];
@@ -370,12 +372,10 @@ var BarcodeDrawer = (function () {
     
     var size = getSize();
     
-    //alert(JSON.stringify(size) );
-
     var startingpos = hpos - 7;
     
     doc = getCurrentOrNewDocument(preset, size);
-  
+
     if( (preset.pageIndex < 0) || (preset.pageIndex > doc.pages.length-1) ) {
       page = doc.pages[0];
     } else {
