@@ -155,8 +155,9 @@
   // EAN-13 Input
   //-------------
   var input = dialog.add('panel', undefined, 'New Barcode: ');
-  
+
   function updateEANTypeTo( EAN13_type, details ){
+    userChange = false;
     var t = String( EAN13_type );
     if(t.toLowerCase() == "unknown") {
       details = "Unknown";
@@ -168,6 +169,7 @@
       }
     }
     input.text = t;
+    userChange = true;
   }
 
   input.margins = [10,20,10,20];
@@ -241,7 +243,7 @@
           return;
         }
 
-      } else if ( digits.substring(0, 3) == "978" || digits.substring(0, 3) == "979") {
+      } else if ( digits.substring(0, 3) == "978") {
         // ISBN
         try {
           var ean = ISBN.parse(digits);
@@ -253,8 +255,11 @@
             updateEANTypeTo("ISBN", ean.getGroupRecord(digits.substring(3, 13)).record.name );
             return;
         }
+      } else {
+        // EAN-13
+        updateEANTypeTo("EAN-13", GS1_Prefixes.getPrefixInfo(digits.substring(0, 3)) );
+        return;
       }
-
     } // End digits length == 13
 
     // note returned yet...
@@ -264,7 +269,9 @@
   }
 
   eanInput.onChange = function () {
-    checkEanInput();
+    if(userChange) {
+      checkEanInput();
+    }
   }
 
   input.add('statictext', undefined, 'Addon (optional):');
@@ -690,7 +697,7 @@
         } else if(pureEAN.substring(0, 3) == "978" || pureEAN.substring(0, 3) == "979" ){
             preset.humanReadableStr = "ISBN" + String.fromCharCode(0x2007) + preset.ean;
         } else {
-            preset.humanReadableStr = ""; // Country or Coupon EAN-13
+            preset.humanReadableStr = "EAN-13" + String.fromCharCode(0x2007) + preset.ean;
         }
     } else if(pureEAN.length == 10){
         // ISBN-10

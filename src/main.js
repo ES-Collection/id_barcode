@@ -3,6 +3,7 @@
 #include 'fontDrop.js'
 #include 'idUtil.js'
 #include 'isbn.js'
+#include 'gs1Prefixes.js'
 #include 'barcode_library.js'
 #include 'barcode_drawer.js'
 #include 'sui.js'

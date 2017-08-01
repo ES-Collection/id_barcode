@@ -122,7 +122,6 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         function createTemplate() {
             var newTemplate = new Object();
             for(var k in TemplatePreset) newTemplate[k]=TemplatePreset[k];
-            newTemplate.temporaryPreset = false;
             return newTemplate;
         }
         return {
@@ -238,6 +237,8 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         // Create a fresh template
         var _Preset = Template.getInstance();
 
+        var temporaryState = false;
+
         var _hasProp = function( propName ) {
             if( _Preset.hasOwnProperty( propName ) ){
                 return true;
@@ -249,7 +250,16 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
 
         // Public
         //-------
-        presetController.getTemplate = function() {
+        PresetController.setTemporaryState = function( bool ) {
+            temporaryState = bool == true;
+            return temporaryState;
+        }
+
+        PresetController.getTemporaryState = function( bool ) {
+            return temporaryState;
+        }
+
+        PresetController.getTemplate = function() {
             return Template.getInstance();
         }
 
@@ -316,21 +326,15 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
             return holder;
         }
 
-        function removeTemporaryPresets( cleanPresets ){
+        function cleanSave_presets(){
             // This function removes any temporary preset before saving to disk
             var holder = new Array();
-            var len = cleanPresets.length;
+            var len = _Presets.length;
             for (var i = 0; i < len; i++) {
-                if ( cleanPresets[i].hasOwnProperty( "temporaryPreset" ) ) {
-                    if( cleanPresets[i].temporaryPreset == false ) {
-                        delete cleanPresets[i].temporaryPreset;
-                        holder.push( cleanPresets[i] );
-                    }
-                } else {
-                    holder.push( cleanPresets[i] );
+                if(! _Presets[i].getTemporaryState() ) {
+                    holder.push( _Presets[i].get() );
                 }
             }
-
             return holder;
         }
 
@@ -435,21 +439,31 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
             return clean();
         }
 
-        PresetsController.add = function ( preset, position ) {
+        PresetsController.add = function ( preset, options ) {
+            // options { position: integer, temporary preset: boolean }
             // para position; index that can handle negative numbers
             // that are calculated from the back -1 == last
+
             var len = _Presets.length;
-            // Not a number
-            if ( isNaN(position) ) {
-                position = len;
+            var pos = len;
+
+            if(options && options.hasOwnProperty('position')) {
+                pos = options.position;
+                if ( isNaN(pos) ) {
+                    pos = len;
+                }
+                if( outOfRange(pos, len) ) {
+                    pos = len;
+                }
             }
 
-            if( outOfRange(position, len) ) {
-                position = len;
-            }
-            
-            var i = calcIndex( position, len+1 );
+            var i = calcIndex( pos, len+1 );
             var infusedPreset = new presetController( preset );
+
+            if(options && options.hasOwnProperty('temporary')) {
+                infusedPreset.setTemporaryState( options.temporary == true );
+            }
+
             _Presets.splice(i, 0, infusedPreset);
 
             return clean();
@@ -482,7 +496,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
             }
 
             var newLen = _Presets.length+1;
-            PresetsController.add( Preset, position );
+            PresetsController.add( Preset, {position: position} );
 
             return _Presets.length == newLen;
         }
@@ -501,7 +515,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         
         PresetsController.overwriteIndex = function ( position, Preset ) {
             PresetsController.remove( position );
-            PresetsController.add( Preset, position );
+            PresetsController.add( Preset, {position: position} );
             return clean();
         }
 
@@ -521,7 +535,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         }
 
         PresetsController.saveToDisk  = function ( ) {
-            var presetStr = JSON.stringify( removeTemporaryPresets( clean() ));
+            var presetStr = JSON.stringify( cleanSave_presets() );
             return writeFile(filePath, presetStr);
         }
 
@@ -827,7 +841,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
     // Extend presetController UiPreset
     Espm.UiPreset.save = function( position ) {
         // position or index, negative numbers are calculated from the back -1 == last
-        return Espm.Presets.add( Espm.UiPreset.get(), position );
+        return Espm.Presets.add( Espm.UiPreset.get(), {position: position} );
     }
 
     Espm.UiPreset.loadIndex = function ( index ) {
@@ -2616,10 +2630,6 @@ var ISBN = {
 
 ISBN.isbn.prototype = {
   isValid: function() {
-    
-    //alert("this.codes: " + String(this.codes) );
-    //alert("this.codes.isValid: " + String(this.codes.isValid) );
-
     return this.codes && this.codes.isValid;
   },
 
@@ -2673,9 +2683,6 @@ ISBN.isbn.prototype = {
 
     // coerce ISBN to string
     val += '';
-
-    // correct for misplaced hyphens
-    // val = val.replace(/ -/,'');
 
     if( val.match(/^\d{9}[\dX]$/) ) {
       
@@ -2813,7 +2820,166 @@ ISBN.isbn.prototype = {
 
 // END isbn.js
 
-﻿function log(text) {
+// Updated 25 July 2017
+
+var GS1_Prefixes = {
+    
+    // https://www.gs1.org/company-prefix
+
+    // BEWARE company prefixes are saved as numbers! (Asuming a three digit string)
+    // The parsed string (0 - 19) means '000' – '019' and not '0000' – '0019'
+
+    companyPrefixes: [
+        [   0,   0,  "Unused"], // to avoid collision with GTIN-8
+        [   1,  19,  "UPC-A United States and Canada"],
+        [  20,  29,  "UPC-A Restricted distribution"],
+        [  30,  39,  "UPC-A United States Drugs"],
+        [  40,  49,  "UPC-A Restricted"],
+        [  50,  59,  "UPC-A Coupons"],
+        [  60,  99,  "UPC-A United States and Canada"],
+        [ 100, 139,  "United States"],
+        [ 200, 299,  "Restricted distribution"],    // (MO defined)
+        [ 300, 379,  "France and Monaco"],
+        [ 380, 380,  "Bulgaria"],
+        [ 383, 383,  "Slovenia"],
+        [ 385, 385,  "Croatia"],
+        [ 387, 387,  "Bosnia and Herzegovina"],
+        [ 389, 389,  "Montenegro"],
+        [ 390, 390,  "Kosovo"],
+        [ 400, 440,  "Germany"],
+        [ 450, 459,  "Japan"],
+        [ 460, 469,  "Russia"],
+        [ 470, 470,  "Kyrgyzstan"],
+        [ 471, 471,  "Taiwan"],
+        [ 474, 474,  "Estonia"],
+        [ 475, 475,  "Latvia"],
+        [ 476, 476,  "Azerbaijan"],
+        [ 477, 477,  "Lithuania"],
+        [ 478, 478,  "Uzbekistan"],
+        [ 479, 479,  "Sri Lanka"],
+        [ 480, 480,  "Philippines"],
+        [ 481, 481,  "Belarus"],
+        [ 482, 482,  "Ukraine"],
+        [ 483, 483,  "Turkmenistan"],
+        [ 484, 484,  "Moldova"],
+        [ 485, 485,  "Armenia"],
+        [ 486, 486,  "Georgia"],
+        [ 487, 487,  "Kazakhstan"],
+        [ 488, 488,  "Tajikistan"],
+        [ 489, 489,  "Hong Kong"],
+        [ 490, 499,  "Japan"],
+        [ 500, 509,  "United Kingdom"],
+        [ 520, 521,  "Greece"],
+        [ 528, 528,  "Lebanon"],
+        [ 529, 529,  "Cyprus"],
+        [ 530, 530,  "Albania"],
+        [ 531, 531,  "Macedonia"],
+        [ 535, 535,  "Malta"],
+        [ 539, 539,  "Republic of Ireland"],
+        [ 540, 549,  "Belgium and Luxembourg"],
+        [ 560, 560,  "Portugal"],
+        [ 569, 569,  "Iceland"],
+        [ 570, 579,  "Denmark, Faroe Islands and Greenland"],
+        [ 590, 590,  "Poland"],
+        [ 594, 594,  "Romania"],
+        [ 599, 599,  "Hungary"],
+        [ 600, 601,  "South Africa"],
+        [ 603, 603,  "Ghana"],
+        [ 604, 604,  "Senegal"],
+        [ 608, 608,  "Bahrain"],
+        [ 609, 609,  "Mauritius"],
+        [ 611, 611,  "Morocco"],
+        [ 613, 613,  "Algeria"],
+        [ 615, 615,  "Nigeria"],
+        [ 616, 616,  "Kenya"],
+        [ 618, 618,  "Ivory Coast"],
+        [ 619, 619,  "Tunisia"],
+        [ 620, 620,  "Tanzania"],
+        [ 621, 621,  "Syria"],
+        [ 622, 622,  "Egypt"],
+        [ 623, 623,  "Brunei"],
+        [ 624, 624,  "Libya"],
+        [ 625, 625,  "Jordan"],
+        [ 626, 626,  "Iran"],
+        [ 627, 627,  "Kuwait"],
+        [ 628, 628,  "Saudi Arabia"],
+        [ 629, 629,  "United Arab Emirates"],
+        [ 640, 649,  "Finland"],
+        [ 690, 699,  "China"],
+        [ 700, 709,  "Norway"],
+        [ 729, 729,  "Israel"],
+        [ 730, 739,  "Sweden"],
+        [ 740, 740,  "Guatemala"],
+        [ 741, 741,  "El Salvador"],
+        [ 742, 742,  "Honduras"],
+        [ 743, 743,  "Nicaragua"],
+        [ 744, 744,  "Costa Rica"],
+        [ 745, 745,  "Panama"],
+        [ 746, 746,  "Dominican Republic"],
+        [ 750, 750,  "Mexico"],
+        [ 754, 755,  "Canada"],
+        [ 759, 759,  "Venezuela"],
+        [ 760, 769,  "Switzerland and Liechtenstein"],
+        [ 770, 771,  "Colombia"],
+        [ 773, 773,  "Uruguay"],
+        [ 775, 775,  "Peru"],
+        [ 777, 777,  "Bolivia"],
+        [ 778, 779,  "Argentina"],
+        [ 780, 780,  "Chile"],
+        [ 784, 784,  "Paraguay"],
+        [ 786, 786,  "Ecuador"],
+        [ 789, 790,  "Brazil"],
+        [ 800, 839,  "Italy, San Marino and Vatican City"],
+        [ 840, 849,  "Spain and Andorra"],
+        [ 850, 850,  "Cuba"],
+        [ 858, 858,  "Slovakia"],
+        [ 859, 859,  "Czech Republic"],
+        [ 860, 860,  "Serbia"],
+        [ 865, 865,  "Mongolia"],
+        [ 867, 867,  "North Korea"],
+        [ 868, 869,  "Turkey"],
+        [ 870, 879,  "Netherlands"],
+        [ 880, 880,  "South Korea"],
+        [ 884, 884,  "Cambodia"],
+        [ 885, 885,  "Thailand"],
+        [ 888, 888,  "Singapore"],
+        [ 890, 890,  "India"],
+        [ 893, 893,  "Vietnam"],
+        [ 896, 896,  "Pakistan"],
+        [ 899, 899,  "Indonesia"],
+        [ 900, 919,  "Austria"],
+        [ 930, 939,  "Australia"],
+        [ 940, 949,  "New Zealand"],
+        [ 950, 950,  "GS1 Global Office"],      // Special applications
+        [ 951, 951,  "EPCglobal"],              // Special applications
+        [ 955, 955,  "Malaysia"],
+        [ 958, 958,  "Macau"],
+        [ 960, 960,  "GS1 UK"],
+        [ 961, 969,  "GS1 Global Office"],      // GTIN-8
+        [ 977, 977,  "ISSN"],
+        [ 978, 978,  "ISBN"],
+        [ 979, 979,  "ISMN"],
+        [ 980, 980,  "Refund receipt"],
+        [ 981, 984,  "Coupon"],                 // Common Currency 
+        [ 990, 999,  "Coupon"]
+    ],
+
+    getPrefixInfo : function ( prefix ) {
+        // Param prefix: String of 3 digits
+        var p = parseInt( prefix );
+    
+        for (var i = this.companyPrefixes.length-1; i >= 0; i--) {
+            if(p >= this.companyPrefixes[i][0] && p <= this.companyPrefixes[i][1]) {
+                return this.companyPrefixes[i][2];
+            }
+        }
+
+        // Prefixes not listed above are reserved by 
+        // GS1 Global Office for allocations in non-member 
+        // countries and for future use.
+        return "Reserved";
+    }
+}﻿function log(text) {
   $.writeln(text);
 }
 
@@ -3308,9 +3474,8 @@ function FontSelect(group, font, resetPresetDropdown) {
         if( eBarcodePreset ) {
             eBarcodePreset.name = "[ "+ eBarcodePreset.ean +" ]";
             eBarcodePreset = updatePageNumber( eBarcodePreset );
-            // Tag preset so it will not be saved to disk
-            eBarcodePreset.temporaryPreset = true;
-            Pm.Presets.add(eBarcodePreset, 0);
+            // Temporary preset so it will not be saved to disk
+            Pm.Presets.add(eBarcodePreset, {position: 0, temporary: true} );
         }
       }
     } else {
@@ -3327,7 +3492,7 @@ function FontSelect(group, font, resetPresetDropdown) {
         activeDocPreset = updatePageNumber( activeDocPreset );
       }
       // Save
-      Pm.Presets.add(activeDocPreset, 0);
+      Pm.Presets.add(activeDocPreset, {position: 0, temporary: true});
     } // End existing barcodes
 
     // see if there is a barcode box on active spread
@@ -3407,17 +3572,23 @@ function FontSelect(group, font, resetPresetDropdown) {
   // EAN-13 Input
   //-------------
   var input = dialog.add('panel', undefined, 'New Barcode: ');
-  
-  function updateEANTypeTo( EAN13_type ){
+
+  function updateEANTypeTo( EAN13_type, details ){
+    userChange = false;
     var t = String( EAN13_type );
-    if( t == "EAN-13" ) t = "Unknown";
-    var r = "EAN-13";
-    if( t.length > 0 ) {
-      r += " [ " + t + " ]";
+    if(t.toLowerCase() == "unknown") {
+      details = "Unknown";
+      t = "EAN-13";
     }
-    input.text = r + ":";
+    if (typeof details === 'string' || details instanceof String) {
+      if( details.length > 0 ) {
+        t += " [ " + details + " ]";
+      }
+    }
+    input.text = t;
+    userChange = true;
   }
-  
+
   input.margins = [10,20,10,20];
   input.alignment = "fill";
   input.alignChildren = "left";
@@ -3428,7 +3599,7 @@ function FontSelect(group, font, resetPresetDropdown) {
   eanInput.active = true;
   eanInput.text = Pm.UiPreset.getProp('ean');
 
-  eanInput.onChange = function () {
+  function checkEanInput() {
     var digits = eanInput.text.replace(/[^\dXx]+/g, '');
     if (digits.length == 8) {
       // ISSN
@@ -3446,7 +3617,7 @@ function FontSelect(group, font, resetPresetDropdown) {
       }
       if ( ean && ean.isIsbn10() ) {
           eanInput.text = ISBN.hyphenate(digits);
-          updateEANTypeTo("ISBN");
+          updateEANTypeTo("ISBN", ean.getGroupRecord(digits.substring(3, 13)).record.name );
           return;
       }
       return;
@@ -3489,7 +3660,7 @@ function FontSelect(group, font, resetPresetDropdown) {
           return;
         }
 
-      } else if ( digits.substring(0, 3) == "978" || digits.substring(0, 3) == "979") {
+      } else if ( digits.substring(0, 3) == "978") {
         // ISBN
         try {
           var ean = ISBN.parse(digits);
@@ -3498,17 +3669,26 @@ function FontSelect(group, font, resetPresetDropdown) {
         }
         if ( ean && ean.isIsbn13() ) {
             eanInput.text = ISBN.hyphenate(digits);
-            updateEANTypeTo("ISBN");
+            updateEANTypeTo("ISBN", ean.getGroupRecord(digits.substring(3, 13)).record.name );
             return;
         }
+      } else {
+        // EAN-13
+        updateEANTypeTo("EAN-13", GS1_Prefixes.getPrefixInfo(digits.substring(0, 3)) );
+        return;
       }
-
     } // End digits length == 13
 
     // note returned yet...
-    updateEANTypeTo("EAN-13");
+    updateEANTypeTo("Unknown");
     eanInput.text = eanInput.text.replace(/ +/g, "-");
     eanInput.text = eanInput.text.replace(/[^\dxX-]*/g, "").toUpperCase();
+  }
+
+  eanInput.onChange = function () {
+    if(userChange) {
+      checkEanInput();
+    }
   }
 
   input.add('statictext', undefined, 'Addon (optional):');
@@ -3892,6 +4072,7 @@ function FontSelect(group, font, resetPresetDropdown) {
       if( pageSelect_dropDown.visible ) {
         pageSelect_dropDown.selection = p.pageIndex;
       }
+      checkEanInput();
     } catch (err) {
       alert("Error loading presets: " + err);
     }
@@ -3933,7 +4114,7 @@ function FontSelect(group, font, resetPresetDropdown) {
         } else if(pureEAN.substring(0, 3) == "978" || pureEAN.substring(0, 3) == "979" ){
             preset.humanReadableStr = "ISBN" + String.fromCharCode(0x2007) + preset.ean;
         } else {
-            preset.humanReadableStr = ""; // Country or Coupon EAN-13
+            preset.humanReadableStr = "EAN-13" + String.fromCharCode(0x2007) + preset.ean;
         }
     } else if(pureEAN.length == 10){
         // ISBN-10
@@ -4044,6 +4225,7 @@ var BarcodeDrawer = (function () {
     boxWidth *= scale;
     boxHeight *= scale;
     var rect = page.rectangles.add();
+    rect.appliedObjectStyle = doc.objectStyles.item(0);
     rect.strokeWeight = 0;
     rect.strokeColor = "None";
     rect.fillColor = colour || "Black";
@@ -4157,7 +4339,7 @@ var BarcodeDrawer = (function () {
     // calculate the initial fontsize 
     // and use this size to draw the other characters
     // this makes sure all numbers are the same size
-    var textBox = drawChar(preset, hpos - 10, '9', preset.codeFont, 20, false); //initial '9'
+    var textBox = drawChar(preset, hpos - 10, preset.ean[0], preset.codeFont, 20, false); //initial '9'
     var fontSize = fitTextBox(textBox, true, true); // Fit type size
 
     outline(preset, textBox);
@@ -4248,6 +4430,7 @@ var BarcodeDrawer = (function () {
       boxWidth *= scale;
       boxHeight *= scale;
       var textBox = page.textFrames.add();
+      textBox.appliedObjectStyle = doc.objectStyles.item(0);
       textBox.contents = text;
       textBox.textFramePreferences.verticalJustification = frameAlign;
       var textStyle = textBox.textStyleRanges[0];
@@ -4370,12 +4553,10 @@ var BarcodeDrawer = (function () {
     
     var size = getSize();
     
-    //alert(JSON.stringify(size) );
-
     var startingpos = hpos - 7;
     
     doc = getCurrentOrNewDocument(preset, size);
-  
+
     if( (preset.pageIndex < 0) || (preset.pageIndex > doc.pages.length-1) ) {
       page = doc.pages[0];
     } else {

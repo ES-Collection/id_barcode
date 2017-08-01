@@ -158,7 +158,7 @@ var BarcodeDrawer = (function () {
     // calculate the initial fontsize 
     // and use this size to draw the other characters
     // this makes sure all numbers are the same size
-    var textBox = drawChar(preset, hpos - 10, '9', preset.codeFont, 20, false); //initial '9'
+    var textBox = drawChar(preset, hpos - 10, preset.ean[0], preset.codeFont, 20, false); //initial '9'
     var fontSize = fitTextBox(textBox, true, true); // Fit type size
 
     outline(preset, textBox);

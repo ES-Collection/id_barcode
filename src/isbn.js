@@ -927,10 +927,6 @@ var ISBN = {
 
 ISBN.isbn.prototype = {
   isValid: function() {
-    
-    //alert("this.codes: " + String(this.codes) );
-    //alert("this.codes.isValid: " + String(this.codes.isValid) );
-
     return this.codes && this.codes.isValid;
   },
 
@@ -984,9 +980,6 @@ ISBN.isbn.prototype = {
 
     // coerce ISBN to string
     val += '';
-
-    // correct for misplaced hyphens
-    // val = val.replace(/ -/,'');
 
     if( val.match(/^\d{9}[\dX]$/) ) {
       
