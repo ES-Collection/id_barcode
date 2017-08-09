@@ -1,5 +1,5 @@
-InDesign Barcode maker
-======================
+InDesign Barcode Generator
+==========================
 
 Easily generate EAN-13 based barcodes in InDesign.
 

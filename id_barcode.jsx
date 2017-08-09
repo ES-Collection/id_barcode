@@ -72,7 +72,7 @@ var standardPresets = [standardPreset];
 
     Bruno Herfst 2017
 
-    Version 1.1
+    Version 1.2
     
     MIT license (MIT)
     
@@ -638,6 +638,13 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
             return createMsg ( true, "Done" );
         }
 
+        WidgetCreator.activateLastUsed = function () {
+            // This function resets the dropdown to last (Last Used)
+            presetsDrop.selection = Espm.Presets.getIndex( listKey, lastUsedPresetName )[0]+1;
+            presetBut.text = ButtonText.save;
+            return createMsg ( true, "Done" );
+        }
+
         WidgetCreator.saveUiPreset = function () {
             Espm.UiPreset.load( DataPort.getData() );
             return createMsg ( true, "Done" );
@@ -696,13 +703,11 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         }
 
         WidgetCreator.loadIndex = function( i ) {
-            // Load data in UiPreset
-            if( i == 0 ) {
-                Espm.UiPreset.reset();
-            } else if ( i > 0 ) {
+            // Loads data in UiPreset and update UI
+            if ( i > 0 ) {
                 // Presets don't include [New Preset]
                 Espm.UiPreset.loadIndex( i-1 );
-            } else if ( i < 0 ) {
+            } else if ( i <= 0 ) {
                 // Get from back
                 Espm.UiPreset.loadIndex( i );
             }
@@ -2979,29 +2984,96 @@ var GS1_Prefixes = {
         // countries and for future use.
         return "Reserved";
     }
-}﻿function log(text) {
-  $.writeln(text);
-}
+}﻿/*
+*
+* http://en.wikipedia.org/wiki/European_Article_Number
+* http://en.wikipedia.org/wiki/International_Standard_Book_Number
+* http://en.wikipedia.org/wiki/International_Standard_Music_Number
+* http://en.wikipedia.org/wiki/International_Standard_Serial_Number
+* http://en.wikipedia.org/wiki/EAN_5
+* http://en.wikipedia.org/wiki/EAN_2
+*
+*/
+
+var ean13_pattern = [
+  ['L', 'L', 'L', 'L', 'L', 'L', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'L', 'G', 'L', 'G', 'G', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'L', 'G', 'G', 'L', 'G', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'L', 'G', 'G', 'G', 'L', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'G', 'L', 'L', 'G', 'G', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'G', 'G', 'L', 'L', 'G', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'G', 'G', 'G', 'L', 'L', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'G', 'L', 'G', 'L', 'G', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'G', 'L', 'G', 'G', 'L', 'R', 'R', 'R', 'R', 'R', 'R'],
+  ['L', 'G', 'G', 'L', 'G', 'L', 'R', 'R', 'R', 'R', 'R', 'R']
+];
+
+var addon_pattern = [
+  ['G', 'G', 'L', 'L', 'L'],
+  ['G', 'L', 'G', 'L', 'L'],
+  ['G', 'L', 'L', 'G', 'L'],
+  ['G', 'L', 'L', 'L', 'G'],
+  ['L', 'G', 'G', 'L', 'L'],
+  ['L', 'L', 'G', 'G', 'L'],
+  ['L', 'L', 'L', 'G', 'G'],
+  ['L', 'G', 'L', 'G', 'L'],
+  ['L', 'G', 'L', 'L', 'G'],
+  ['L', 'L', 'G', 'L', 'G']
+];
+
+var bar_widths = {
+  L: [
+    [0, 0, 0, 1, 1, 0, 1],
+    [0, 0, 1, 1, 0, 0, 1],
+    [0, 0, 1, 0, 0, 1, 1],
+    [0, 1, 1, 1, 1, 0, 1],
+    [0, 1, 0, 0, 0, 1, 1],
+    [0, 1, 1, 0, 0, 0, 1],
+    [0, 1, 0, 1, 1, 1, 1],
+    [0, 1, 1, 1, 0, 1, 1],
+    [0, 1, 1, 0, 1, 1, 1],
+    [0, 0, 0, 1, 0, 1, 1]
+  ],
+  G: [
+    [0, 1, 0, 0, 1, 1, 1],
+    [0, 1, 1, 0, 0, 1, 1],
+    [0, 0, 1, 1, 0, 1, 1],
+    [0, 1, 0, 0, 0, 0, 1],
+    [0, 0, 1, 1, 1, 0, 1],
+    [0, 1, 1, 1, 0, 0, 1],
+    [0, 0, 0, 0, 1, 0, 1],
+    [0, 0, 1, 0, 0, 0, 1],
+    [0, 0, 0, 1, 0, 0, 1],
+    [0, 0, 1, 0, 1, 1, 1]
+  ],
+  R: [
+    [1, 1, 1, 0, 0, 1, 0],
+    [1, 1, 0, 0, 1, 1, 0],
+    [1, 1, 0, 1, 1, 0, 0],
+    [1, 0, 0, 0, 0, 1, 0],
+    [1, 0, 1, 1, 1, 0, 0],
+    [1, 0, 0, 1, 1, 1, 0],
+    [1, 0, 1, 0, 0, 0, 0],
+    [1, 0, 0, 0, 1, 0, 0],
+    [1, 0, 0, 1, 0, 0, 0],
+    [1, 1, 1, 0, 1, 0, 0]
+  ]
+};
 
 var checkCheckDigit = function(str) {
-    // Check ISBN as found here:
+    // Check ISBN improved version from here:
     // http://stackoverflow.com/questions/11104439/how-do-i-check-if-an-input-contains-an-isbn-using-javascript/
 
     var str = String(str).replace(/[^0-9X]/gi, '');
 
-    var len,
-        sum,
-        weight,
-        digit,
-        check,
-        i;
+    var len, sum, i, weight, digit, check;
 
     if (str.length == 13) {
-        // ISBN-13 or padded ISSN
+        // EAN 13. ISBN 13, Padded ISSN
         len = str.length-1;
         sum = 0;
         for (i = 0; i < len; i++) {
-            digit = parseInt(str[i]);
+            digit = Number(str[i]);
             if (i % 2 == 1) {
                 sum += 3*digit;
             } else {
@@ -3015,12 +3087,12 @@ var checkCheckDigit = function(str) {
         return (check == str[str.length-1].toUpperCase());
 
     } else if (str.length == 10 || str.length == 8) {
-        // ISBN-10 or unpadded ISSN
-        len = str.length-1;
+        // ISBN 10, Unpadded ISSN
+        len    = str.length-1;
         weight = str.length;
-        sum = 0;
+        sum    = 0;
         for (i = 0; i < len; i++) {
-          digit = parseInt(str[i]);
+          digit = Number(str[i]);
           sum += (weight - i) * digit;
         }
 
@@ -3035,35 +3107,34 @@ var checkCheckDigit = function(str) {
     }
 }
 
-function calculateCheckDigit(ean) {
-  var c, n, d;
+function calculateCheckDigit( ean ) {
+  var sum, i;
     if (ean.match(/^\d{9}[\dX]?$/)) {
-      // ISBN-10
-      c = 0;
-      for (n = 0; n < 9; n += 1) {
-        c += (10 - n) * ean.charAt(n);
+      // ISBN 10
+      sum = 0;
+      for (i = 0; i < 9; i += 1) {
+        sum += (10 - i) * Number(ean.charAt(i));
       }
-      c = (11 - c % 11) % 11;
-      return c === 10 ? 'X' : String(c);
+      sum = (11 - sum % 11) % 11;
+      return sum === 10 ? 'X' : String(sum);
 
-    } else if (ean.match(/(?:978|979|977)\d{9}[\dX]?/)) {
-      // ISBN-13 ISSN-13
-      c = 0;
-      for (n = 0; n < 12; n += 2) {
-        c += Number(ean.charAt(n)) + 3 * ean.charAt(n + 1);
+    } else if (ean.match(/\d{12}[\dX]?/)) {
+      // EAN 13, ISBN 13, ISSN 13
+      sum = 0;
+      for (i = 0; i < 12; i += 2) {
+        sum += Number(ean.charAt(i)) + 3 * Number(ean.charAt(i + 1));
       }
-      c = (10 - c % 10) % 10;
-      return c === 10 ? 'X' : String(c);
+      sum = (10 - sum % 10) % 10;
+      return sum === 10 ? 'X' : String(sum);
     
     } else if (ean.match(/^\d{7}[\dX]?$/)) {
-      //ISSN-8
-      // https://en.wikipedia.org/wiki/International_Standard_Serial_Number
-      c = 0;
-      for (n = 0; n < 7; n += 1) {
-        c += (8 - n) * ean.charAt(n);
+      //ISSN 8
+      sum = 0;
+      for (i = 0; i < 7; i += 1) {
+        sum += (8 - i) * Number(ean.charAt(i));
       }
-      c = (11 - c % 11) % 11;
-      return c === 10 ? 'X' : String(c);
+      sum = (11 - sum % 11) % 11;
+      return sum === 10 ? 'X' : String(sum);
 
     }
 
@@ -3075,6 +3146,114 @@ var Barcode = function () {
   var addon_string;
   var stripped;
   var pattern;
+  var dimensions;
+
+  function getDimensions( options ) {
+      /*
+    
+      This function gets the dimensions for an EAN-13 barcode
+      
+      Param: Options (Object): {dpi: integer, scale: integer (percent), heightAdjust:  integer (percent)} 
+      
+      Note: Values are in mm unless otherwise indicated
+
+      */
+
+      // Barcode Dimension Object (return)
+      var BD = new Object();
+
+      function fitDPI( VALUE_MM, DPI ) {
+          var value = parseFloat(VALUE_MM)/25.4; // Inches
+          var dpi   = parseInt(DPI);
+
+          var dotWidth = 1/dpi;
+          var dotCount = Math.floor( dpi * value );
+
+          var rasterSize = dotWidth * dotCount;
+          return rasterSize * 25.4; // in mm
+      }
+
+      BD.dpi = 0;
+      if( options && options.hasOwnProperty('dpi') ) {
+          BD.dpi = parseFloat(options.dpi);
+      }
+
+      BD.scale = 100; // Percentage
+      if( options && options.hasOwnProperty('scale') ) {
+          BD.scale = parseInt(options.scale);
+      }
+      
+      BD.scalePercent = parseFloat(BD.scale)/100;
+
+      // The recommended typeface for the Human Readable Interpretation is OCR-B at a height of 2.75mm
+      BD.fontHeight = 2.75 * BD.scalePercent;
+
+      BD.barsYoffset = 0;
+      if( options && options.hasOwnProperty('humanReadable') ) {
+            if( options.humanReadable ){
+                BD.barsYoffset = BD.fontHeight;
+            }
+      }
+
+      BD.barHeight = 22.85 * BD.scalePercent; // Height of normal bar (Not to be confused with guard bar)
+
+      if( options && options.hasOwnProperty('heightAdjust') ) {
+          BD.barHeight = (BD.barHeight/100) * options.heightAdjust;
+      }
+
+      BD.xDimension = 0.33 * BD.scalePercent; // X-dimension is the width of the thinnest bar
+      if( BD.dpi > 0 ) {
+          BD.xDimension = fitDPI( BD.xDimension, BD.dpi );
+      }
+
+      BD.quietZone = 7 * BD.xDimension; // Area of white space on either side of the bars. (X-dimension * 7 = Minimum)
+
+      // Width of all bars (including the width of the Left & Right Quiet Zones)
+      BD.digitWidth = 6 * BD.xDimension;
+      BD.guardWidth = 4 * BD.xDimension;
+      
+      BD.width = (12 * BD.digitWidth) + (3 * BD.guardWidth); // Width of bars including guards
+
+      BD.humanReadableWidth = BD.width + (2 * BD.quietZone) + (2 * BD.digitWidth);
+      BD.minBoxWidth        = BD.width + (2 * BD.quietZone) + (2 * BD.digitWidth) + (2 * BD.xDimension);
+
+      function addWidth( w ) {
+          BD.width       += w;
+          BD.minBoxWidth += w;
+      }
+
+      BD.guardBarOvershoot = 5 * BD.xDimension; // Specification specifies that barHeight is extended downward 5X: barHeight + (X-dimension * 5)  
+      BD.guardHeight = BD.barHeight + BD.guardBarOvershoot; 
+      BD.addonHeight = BD.barHeight - BD.fontHeight;
+
+      BD.height = BD.guardHeight; // Also called symbolHeight or guardHeight; 
+
+      BD.minBoxHeight = BD.barsYoffset + BD.barHeight + BD.fontHeight + (BD.xDimension * 2); // height incl. Machine Readable Numbers
+
+      BD.addonLen    = 0; // How many digits in the addon code
+      BD.addonGap    = BD.quietZone; // How much space bewteen the ean and addon code
+
+      if( options && options.hasOwnProperty('addonLen') ) {
+          BD.addonLen = parseInt(options.addonLen);
+          if( BD.addonLen > 0 ) {
+              // Add gap
+              addWidth( BD.addonGap );
+              // Start (5) + first digit (7) 
+              addWidth( BD.xDimension * 12 );
+              // Seperator (2) + next digits (7)
+              for(var x = BD.addonLen; x > 1; x--) {
+                addWidth( BD.xDimension * 9 );
+              }
+              addWidth( BD.quietZone + BD.xDimension );
+          }
+      }
+      
+      // Some positional markers that are handy to refer to
+      BD.yBottomBar  = BD.barsYoffset + BD.barHeight;
+      BD.startingpos = BD.xDimension;
+
+      return BD;
+  }
 
   function getNorm(bars) {
     var curr = bars[0];
@@ -3097,6 +3276,7 @@ var Barcode = function () {
   function stripAddon(str) {
     return str.replace(/[^\d]+/g, '');
   }
+
   function stripEAN(str) {
     return str.replace(/[^0-9X]/gi, '');
   }
@@ -3122,7 +3302,16 @@ var Barcode = function () {
         }
       }
 
+      dimensions = getDimensions( { dpi           : preset.dpi,
+                                    scale         : preset.scalePercent, 
+                                    heightAdjust  : preset.heightPercent, 
+                                    humanReadable : preset.humanReadable, 
+                                    addonLen      : preset.addon.length} );
       return this;
+    },
+
+    getDimensions: function () {
+      return dimensions;
     },
 
     getStripped: function () {
@@ -3222,77 +3411,6 @@ var Barcode = function () {
     }
 
   }
-};
-
-/*
-*
-* http://en.wikipedia.org/wiki/European_Article_Number
-*
-*/
-
-var ean13_pattern = [
-  ['L', 'L', 'L', 'L', 'L', 'L', 'R', 'R', 'R', 'R', 'R', 'R'],
-  ['L', 'L', 'G', 'L', 'G', 'G', 'R', 'R', 'R', 'R', 'R', 'R'],
-  ['L', 'L', 'G', 'G', 'L', 'G', 'R', 'R', 'R', 'R', 'R', 'R'],
-  ['L', 'L', 'G', 'G', 'G', 'L', 'R', 'R', 'R', 'R', 'R', 'R'],
-  ['L', 'G', 'L', 'L', 'G', 'G', 'R', 'R', 'R', 'R', 'R', 'R'],
-  ['L', 'G', 'G', 'L', 'L', 'G', 'R', 'R', 'R', 'R', 'R', 'R'],
-  ['L', 'G', 'G', 'G', 'L', 'L', 'R', 'R', 'R', 'R', 'R', 'R'],
-  ['L', 'G', 'L', 'G', 'L', 'G', 'R', 'R', 'R', 'R', 'R', 'R'],
-  ['L', 'G', 'L', 'G', 'G', 'L', 'R', 'R', 'R', 'R', 'R', 'R'],
-  ['L', 'G', 'G', 'L', 'G', 'L', 'R', 'R', 'R', 'R', 'R', 'R']
-];
-
-var addon_pattern = [
-  ['G', 'G', 'L', 'L', 'L'],
-  ['G', 'L', 'G', 'L', 'L'],
-  ['G', 'L', 'L', 'G', 'L'],
-  ['G', 'L', 'L', 'L', 'G'],
-  ['L', 'G', 'G', 'L', 'L'],
-  ['L', 'L', 'G', 'G', 'L'],
-  ['L', 'L', 'L', 'G', 'G'],
-  ['L', 'G', 'L', 'G', 'L'],
-  ['L', 'G', 'L', 'L', 'G'],
-  ['L', 'L', 'G', 'L', 'G']
-];
-
-var bar_widths = {
-  L: [
-    [0, 0, 0, 1, 1, 0, 1],
-    [0, 0, 1, 1, 0, 0, 1],
-    [0, 0, 1, 0, 0, 1, 1],
-    [0, 1, 1, 1, 1, 0, 1],
-    [0, 1, 0, 0, 0, 1, 1],
-    [0, 1, 1, 0, 0, 0, 1],
-    [0, 1, 0, 1, 1, 1, 1],
-    [0, 1, 1, 1, 0, 1, 1],
-    [0, 1, 1, 0, 1, 1, 1],
-    [0, 0, 0, 1, 0, 1, 1]
-  ],
-  G: [
-    [0, 1, 0, 0, 1, 1, 1],
-    [0, 1, 1, 0, 0, 1, 1],
-    [0, 0, 1, 1, 0, 1, 1],
-    [0, 1, 0, 0, 0, 0, 1],
-    [0, 0, 1, 1, 1, 0, 1],
-    [0, 1, 1, 1, 0, 0, 1],
-    [0, 0, 0, 0, 1, 0, 1],
-    [0, 0, 1, 0, 0, 0, 1],
-    [0, 0, 0, 1, 0, 0, 1],
-    [0, 0, 1, 0, 1, 1, 1]
-  ],
-  R: [
-    [1, 1, 1, 0, 0, 1, 0],
-    [1, 1, 0, 0, 1, 1, 0],
-    [1, 1, 0, 1, 1, 0, 0],
-    [1, 0, 0, 0, 0, 1, 0],
-    [1, 0, 1, 1, 1, 0, 0],
-    [1, 0, 0, 1, 1, 1, 0],
-    [1, 0, 1, 0, 0, 0, 0],
-    [1, 0, 0, 0, 1, 0, 0],
-    [1, 0, 0, 1, 0, 0, 0],
-    [1, 1, 1, 0, 1, 0, 0]
-  ]
 };
 
 // END barcode_library.js
@@ -4003,12 +4121,34 @@ function FontSelect(group, font, resetPresetDropdown) {
       createFresh();
     }
 
+    /*  We choose this automatically now based on type
+        ISSN, ISBN, ISMN will get human readable string above EAN code
+
     var HumanRead_checkBox = adjustPanel.add ("checkbox", undefined, "Human-readable");
     HumanRead_checkBox.value = Pm.UiPreset.getProp('humanReadable');
     HumanRead_checkBox.onClick = function () {
       createFresh();
     }
+
+    */
+
   // End adjustment panel
+
+  function humanReadBool( eanString ) {
+      // This function checks if EAN-13 barcode needs human readable string
+      // Returns True or False
+      var prefix = String(eanString).replace(/[^\dXx]+/g, '').substring(0, 3);
+      switch( prefix ) {
+        case "977":
+        case "978":
+        case "979":
+            return true;
+            break;
+        default:
+            return false;
+            break;
+      }
+  }
 
   function getData(){
     // This function creates a new preset from UI data
@@ -4029,7 +4169,7 @@ function FontSelect(group, font, resetPresetDropdown) {
     NewPreset.heightPercent  = parseFloat(heightPercent_editText.text);
     NewPreset.whiteBox       = whiteBG_checkBox.value;
     NewPreset.qZoneIndicator = quiet_checkBox.value;
-    NewPreset.humanReadable  = HumanRead_checkBox.value;
+    NewPreset.humanReadable  = humanReadBool(NewPreset.ean);
     NewPreset.dpi            = parseInt(dpi_editText.text);
     NewPreset.bwr            = {value: parseFloat(bwr_editText.text), unit: bwr_measureDrop.selection.text};
     NewPreset.alignTo        = alignTo_dropDown.selection.text;
@@ -4038,7 +4178,7 @@ function FontSelect(group, font, resetPresetDropdown) {
     if( pageSelect_dropDown.visible ) {
       NewPreset.pageIndex    = pageSelect_dropDown.selection.index;
     }
-    
+
     return NewPreset;
   }
 
@@ -4061,7 +4201,7 @@ function FontSelect(group, font, resetPresetDropdown) {
       heightPercent_editText.text   = String(p.heightPercent);
       whiteBG_checkBox.value        = p.whiteBox;
       quiet_checkBox.value          = p.qZoneIndicator;
-      HumanRead_checkBox.value      = p.humanReadable;
+      // HumanRead_checkBox.value      = p.humanReadable;
       dpi_editText.text             = p.dpi;
       bwr_editText.text             = p.bwr.value;
       bwr_measureDrop.selection     = idUtil.find(bwrUnits,       p.bwr.unit);
@@ -4180,18 +4320,16 @@ function FontSelect(group, font, resetPresetDropdown) {
 // END barcode_ui.js
 
 // Start BarcodeDrawer
+
 var BarcodeDrawer = (function () {
   var doc;
   var originalRulers;
   var page;
   var layer;
-  var scale;
-  var height;
-  var guardHeight;
-  var addonHeight;
+  var BD;
+  var fontSize;
   var reduce;
   var hpos;
-  var vOffset;
   var presetString;
 
   function getBWR_mm( bwrObj, DPI ) {
@@ -4220,10 +4358,6 @@ var BarcodeDrawer = (function () {
   }
 
   function drawBox(x, y, boxWidth, boxHeight, colour) {
-    x *= scale;
-    y *= scale;
-    boxWidth *= scale;
-    boxHeight *= scale;
     var rect = page.rectangles.add();
     rect.appliedObjectStyle = doc.objectStyles.item(0);
     rect.strokeWeight = 0;
@@ -4278,42 +4412,42 @@ var BarcodeDrawer = (function () {
 
   function drawBar(barWidth, barHeight, y) {
     if (! barHeight) {
-      barHeight = height;
+      barHeight = BD.barHeight;
     }
     if (! y) {
-      y = vOffset;
+      y = BD.barsYoffset;
     }
     drawBox(hpos + (reduce/2), y, barWidth - reduce, barHeight);
   }
 
-  function drawAddonBar(addonWidth) {
-    drawBar(addonWidth, addonHeight, vOffset + (guardHeight - addonHeight));
+  function drawAddonBar( addonWidth ) {
+    drawBar( addonWidth, BD.addonHeight, BD.barsYoffset + BD.fontHeight);
   }
 
   function drawGuard() {
-    drawBar(1, guardHeight);
+    drawBar(BD.xDimension, BD.guardHeight);
   }
 
   function startGuards() {
     drawGuard();
-    hpos += 2;
+    hpos += BD.xDimension*2; // Guard plus space
     drawGuard();
-    hpos += 1;
+    hpos += BD.xDimension*2; // Guard plus space
   }
 
   function midGuards() {
-    hpos += 1;
+    hpos += BD.xDimension;
     drawGuard();
-    hpos += 2;
+    hpos += BD.xDimension*2; // Guard plus space
     drawGuard();
-    hpos += 2;
+    hpos += BD.xDimension*2; // Guard plus space
   }
 
   function endGuards() {
     drawGuard();
-    hpos += 2;
+    hpos += BD.xDimension*2; // Guard plus space
     drawGuard();
-    hpos += 2;
+    hpos += BD.xDimension*2; // Guard plus space
   }
 
   function outline(preset, textBox){
@@ -4336,14 +4470,6 @@ var BarcodeDrawer = (function () {
     var barWidth = null;
     var digit = null;
 
-    // calculate the initial fontsize 
-    // and use this size to draw the other characters
-    // this makes sure all numbers are the same size
-    var textBox = drawChar(preset, hpos - 10, preset.ean[0], preset.codeFont, 20, false); //initial '9'
-    var fontSize = fitTextBox(textBox, true, true); // Fit type size
-
-    outline(preset, textBox);
-
     for (var i = 0; i < barWidths.length; i++) {
       pattern  = barWidths[i][0];
       widths   = barWidths[i][1];
@@ -4354,9 +4480,9 @@ var BarcodeDrawer = (function () {
       for (var j = 0; j < 4; j++) {
         barWidth = widths[j];
         if (pattern[j] === 1) {
-          drawBar(barWidth);
+          drawBar(barWidth * BD.xDimension);
         }
-        hpos += barWidth;
+        hpos += barWidth * BD.xDimension;
       }
       if (i == 5) {
         midGuards();
@@ -4367,26 +4493,28 @@ var BarcodeDrawer = (function () {
 
   function drawAddon(preset, addonWidths) {
     var pattern = null;
-    var widths = null;
-    var aWidth = null;
-    var digit = null;
+    var widths  = null;
+    var aWidth  = null;
+    var digit   = null;
 
-    hpos += 10; //gap between barcode and addon
+    hpos += BD.addonGap;
+    hpos += BD.addonGap;
+
     for (var i = 0; i < addonWidths.length; i++) {
       pattern = addonWidths[i][0];
-      widths = addonWidths[i][1];
-      digit = addonWidths[i][2]; //may be undefined
+      widths  = addonWidths[i][1];
+      digit   = addonWidths[i][2]; //may be undefined
 
       if (digit) {
-        var textBox = drawChar(preset, hpos, digit, preset.codeFont, preset.codeFontSize-1, true, -addonHeight-10);
-        textBox.textFramePreferences.verticalJustification = VerticalJustification.BOTTOM_ALIGN;
+        var textBox = drawChar(preset, hpos, digit, preset.codeFont, preset.codeFontSize-1, true, -BD.addonHeight-BD.fontHeight-BD.xDimension);
+        textBox.textFramePreferences.verticalJustification = VerticalJustification.CENTER_ALIGN;
         outline(preset, textBox);
       }
 
       for (var j = 0; j < widths.length; j++) {
-        aWidth = widths[j];
+        aWidth = widths[j] * BD.xDimension;
         if (pattern[j] === 1) {
-          drawAddonBar(aWidth);
+          drawAddonBar( aWidth );
         }
         hpos += aWidth;
       }
@@ -4425,10 +4553,6 @@ var BarcodeDrawer = (function () {
 
   function drawText(x, y, boxWidth, boxHeight, text, font, fontSize, textAlign, frameAlign) {
     try {
-      x *= scale;
-      y *= scale;
-      boxWidth *= scale;
-      boxHeight *= scale;
       var textBox = page.textFrames.add();
       textBox.appliedObjectStyle = doc.objectStyles.item(0);
       textBox.contents = text;
@@ -4450,10 +4574,10 @@ var BarcodeDrawer = (function () {
 
   function drawChar(preset, x, character, font, fontSize, fitBox, yOffset) {
     var yOffset = yOffset || 0;
-    var y = yOffset + vOffset + height + 2;
-    var boxWidth = 7;
-    var boxHeight = 9;
-    var textBox = drawText(x, y, boxWidth, boxHeight, character, font, fontSize, Justification.LEFT_ALIGN, VerticalJustification.TOP_ALIGN);
+    var y = yOffset + BD.yBottomBar;
+    var boxWidth = BD.digitWidth;
+    var boxHeight = BD.fontHeight;
+    var textBox = drawText(x, y, boxWidth, boxHeight, character, font, fontSize, Justification.LEFT_ALIGN, VerticalJustification.CENTER_ALIGN);
       textBox.parentStory.alignToBaseline = false;
     // We don't want lining figures!
     try {
@@ -4471,91 +4595,33 @@ var BarcodeDrawer = (function () {
   }
 
   function savePresets() {
-    var savePresetBox = drawBox(hpos - startX, 0, width, height+12+vOffset, 'None');
+    var savePresetBox = drawBox(hpos - startX, 0, BD.minBoxWidth, BD.minBoxHeight, 'None');
         savePresetBox.label = presetString;
         savePresetBox.name  = "Barcode_Settings";
     return savePresetBox;
   }
 
   function drawWhiteBox() {
-    var whiteBox = drawBox(hpos - startX, 0, width, height+12+vOffset, bgSwatchName);
+    var whiteBox = drawBox(0, 0, BD.minBoxWidth, BD.minBoxHeight, bgSwatchName);
     whiteBox.label = "barcode_whiteBox";
     return whiteBox;
   }
 
-  function fitDPImm( VALUE_MM, DPI ) {
-    var value = parseFloat(VALUE_MM)/25.4; // Inches
-    var dpi   = parseInt(DPI);
-
-    var dotWidth = 1/dpi;
-    var dotCount = Math.floor( dpi * value );
-
-    var rasterSize = dotWidth * dotCount;
-    return rasterSize * 25.4; // in mm
-  }
-
-  function init( preset ) {
-    // When any of these barcodes is at
-    // its nominal or 100% size the width
-    // of the narrowest bar or space is 0.33 mm
-
-    var moduleWidth = 0.33; //mm == 100%
-
-    // One percent of the the 100% size
-    var xDimension_1Percent = moduleWidth/100; // 0.0033; // 1%
-    var xDimension_scaled   = xDimension_1Percent * preset.scalePercent;
-    var xDimension_actual = fitDPImm( xDimension_scaled, preset.dpi);
-    var scalePercent = 100 + ((xDimension_actual-moduleWidth)/moduleWidth * 100);
-    
-    scale = xDimension_1Percent*scalePercent;
-
-    heightAdjustPercent = preset.heightPercent;
-    vOffset = 5;
-    if(preset.humanReadable) {
-      vOffset = 10;
-    }
-    
-    height = 60 + vOffset;
-    width = 114;
-
-    if(String(preset.addon).length == 5) {
-        width = 177;
-    } else if (String(preset.addon).length == 2) {
-        width = 150;
-    }
-    guardHeight = 75;
-    addonHeight = 60;
-    height = (height / 100) * heightAdjustPercent;
-    guardHeight  = (guardHeight / 100) * heightAdjustPercent;
-    addonHeight  = (addonHeight / 100) * heightAdjustPercent;
-
-    // Gain control: Dependent on paper properties and dot distribution.
-    reduce = getBWR_mm( preset.bwr, preset.dpi ); // 10% dotgain == 0.1
-
-    startX = 10 + preset.addQuietZoneMargin;
-    hpos = startX+0;
-    width += (preset.addQuietZoneMargin*2);
-
-    presetString = JSON.stringify( preset );
-  }
-
-  function getSize(){
-    var _height = height+12+vOffset;
-    return {  width : width * scale, height : _height * scale };
-  }
-
   function drawBarcode( preset ) {
-    var barcode = Barcode().init(preset);
-    var barWidths = barcode.getNormalisedWidths();
+    var barcode     = Barcode().init( preset ); // barcode_library.js
+    var barWidths   = barcode.getNormalisedWidths();
     var addonWidths = barcode.getNormalisedAddon();
 
-    init(preset);
+    BD = barcode.getDimensions();
+
+    startX = BD.xDimension;
+    hpos   = startX;
+    // Gain control: Dependent on paper properties and dot distribution.
+    reduce = getBWR_mm( preset.bwr, preset.dpi ); // 10% dotgain == 0.1
     
-    var size = getSize();
-    
-    var startingpos = hpos - 7;
-    
-    doc = getCurrentOrNewDocument(preset, size);
+    presetString = JSON.stringify( preset );
+
+    doc = getCurrentOrNewDocument(preset, {  width : BD.minBoxWidth, height : BD.minBoxHeight });
 
     if( (preset.pageIndex < 0) || (preset.pageIndex > doc.pages.length-1) ) {
       page = doc.pages[0];
@@ -4585,6 +4651,17 @@ var BarcodeDrawer = (function () {
     
     savePresets();
 
+    // calculate the initial fontsize 
+    // and use this size to draw the other characters
+    // this makes sure all numbers are the same size
+    var textBox = drawChar(preset, hpos, preset.ean[0], preset.codeFont, 20, false); //initial '9'
+    fontSize = fitTextBox(textBox, true, true); // Fit type size
+
+    outline(preset, textBox);
+
+    hpos   += BD.digitWidth + BD.xDimension;
+    startX += BD.digitWidth + BD.xDimension;
+
     startGuards();
     preset.codeFontSize = drawMain(preset, barWidths);
     endGuards();
@@ -4592,19 +4669,11 @@ var BarcodeDrawer = (function () {
     if(preset.qZoneIndicator) {
       var textBox = drawChar(preset, hpos, '>', preset.codeFont, preset.codeFontSize, true); //quiet zone indicator '>'
       var elements = outline(preset, textBox);
-      var elementsBounds = idUtil.getMaxBounds( elements );
-
-      if(scale != 0 && elementsBounds[3] != 0) {
-        elementsBounds[3] /= scale;
-      }
-      var humanReadableWidth = elementsBounds[3] - startingpos;
-    } else {
-      var humanReadableWidth = hpos - startingpos;
     }
 
-    if(preset.humanReadable) {
-      var textBox = drawText( startingpos, vOffset - 8.5, humanReadableWidth, 6.5, 
-        preset.humanReadableStr, preset.readFont, 20, Justification.FULLY_JUSTIFIED, VerticalJustification.BOTTOM_ALIGN);
+    if(preset.humanReadable && preset.humanReadableStr.length > 0) {
+      var textBox = drawText( BD.startingpos, 0, BD.humanReadableWidth, BD.barsYoffset, 
+        preset.humanReadableStr, preset.readFont, 20, Justification.FULLY_JUSTIFIED, VerticalJustification.CENTER_ALIGN);
 
       try {
         textBox.parentStory.otfFigureStyle = OTFFigureStyle.PROPORTIONAL_LINING;
@@ -4627,8 +4696,8 @@ var BarcodeDrawer = (function () {
     BarcodeGroup.label = "Barcode_Complete";
 
     // Let's position the barcode now
-    BarcodeGroup.move(page.parent.pages[0]);
-    BarcodeGroup.visibleBounds = idUtil.calcOffset(BarcodeGroup.visibleBounds, page, preset);
+    //BarcodeGroup.move(page.parent.pages[0]);
+    //BarcodeGroup.visibleBounds = idUtil.calcOffset(BarcodeGroup.visibleBounds, page, preset);
     
     //reset rulers
     idUtil.setRuler(doc, originalRulers);
@@ -4645,7 +4714,7 @@ var BarcodeDrawer = (function () {
 function main(){
   // Get preset from user
   var userPreset = showDialog();
-
+  
   if( userPreset ) {
       BarcodeDrawer.drawBarcode( userPreset );
   } // else: user pressed cancel
