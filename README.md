@@ -10,7 +10,7 @@ Use [`id_barcode.jsx`](https://github.com/gitbruno/id_barcode/raw/master/id_barc
 
 ## Supported codes & symbologies
 
-### EAN-13 (With addon)
+### EAN-13
 The International Article Number (EAN) is a 13-digit barcode symbology. The EAN-13 barcode is used worldwide for marking products often sold at retail point of sale.
 
 ### ISBN  
@@ -23,7 +23,15 @@ An International Standard Serial Number (ISSN) is an 8-digit code used to identi
 The International Standard Music Number (ISMN) is a unique number for the identification of all notated music publications.
 
 
-## Extra Features
+## Features
+
+### Add-on Barcodes
+
+InDesign Barcode maker can add a 2-digit EAN-2, or 5-digit EAN-5 supplemental barcode, placed on the right-hand side. These add-on barcodes are generally used for newspapers, journals, magazines and periodicals to indicate the current year's issue number. Or for books and weighed products like food to indicate suggested retail price (MSRP).
+
+### Bar Width Adjustments (BWR)
+
+Bar Width Adjustment (also referred to as Bar Width Reduction, or BWR) is a method for adjusting the bars of a barcode to compensate for dot gain. You can enter the Bar Width Reduction in microns, milliinches (mil), millimeters or inches or actual dots.
 
 ### Custom fonts
 
@@ -37,12 +45,4 @@ InDesign Barcode Maker can adjust the height of the barcode to suit your needs. 
 
 To automatically align the barcode make a selection and run the script.
 It will find elements with  script-label `barcode_box` and adds it to your selection options.
-
-### Add-on Barcodes
-
-InDesign Barcode Maker can add a 2-digit EAN-2, or 5-digit EAN-5 supplemental barcode, placed on the right-hand side. These add-on barcodes are generally used for newspapers, journals, magazines and periodicals to indicate the current year's issue number. Or for books and weighed products like food to indicate suggested retail price (MSRP).
-
-### Bar Width Adjustments (BWR)
-
-Bar Width Adjustment (also referred to as Bar Width Reduction, or BWR) is a method for adjusting the bars of a barcode to compensate for dot gain. You can enter the Bar Width Reduction in microns, milliinches (mil), millimeters or inches or actual dots.
 

@@ -6,7 +6,7 @@
 
     Bruno Herfst 2017
 
-    Version 1.1
+    Version 1.2
     
     MIT license (MIT)
     
@@ -572,6 +572,13 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
             return createMsg ( true, "Done" );
         }
 
+        WidgetCreator.activateLastUsed = function () {
+            // This function resets the dropdown to last (Last Used)
+            presetsDrop.selection = Espm.Presets.getIndex( listKey, lastUsedPresetName )[0]+1;
+            presetBut.text = ButtonText.save;
+            return createMsg ( true, "Done" );
+        }
+
         WidgetCreator.saveUiPreset = function () {
             Espm.UiPreset.load( DataPort.getData() );
             return createMsg ( true, "Done" );
@@ -630,13 +637,11 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         }
 
         WidgetCreator.loadIndex = function( i ) {
-            // Load data in UiPreset
-            if( i == 0 ) {
-                Espm.UiPreset.reset();
-            } else if ( i > 0 ) {
+            // Loads data in UiPreset and update UI
+            if ( i > 0 ) {
                 // Presets don't include [New Preset]
                 Espm.UiPreset.loadIndex( i-1 );
-            } else if ( i < 0 ) {
+            } else if ( i <= 0 ) {
                 // Get from back
                 Espm.UiPreset.loadIndex( i );
             }

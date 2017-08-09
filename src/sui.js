@@ -586,12 +586,34 @@
       createFresh();
     }
 
+    /*  We choose this automatically now based on type
+        ISSN, ISBN, ISMN will get human readable string above EAN code
+
     var HumanRead_checkBox = adjustPanel.add ("checkbox", undefined, "Human-readable");
     HumanRead_checkBox.value = Pm.UiPreset.getProp('humanReadable');
     HumanRead_checkBox.onClick = function () {
       createFresh();
     }
+
+    */
+
   // End adjustment panel
+
+  function humanReadBool( eanString ) {
+      // This function checks if EAN-13 barcode needs human readable string
+      // Returns True or False
+      var prefix = String(eanString).replace(/[^\dXx]+/g, '').substring(0, 3);
+      switch( prefix ) {
+        case "977":
+        case "978":
+        case "979":
+            return true;
+            break;
+        default:
+            return false;
+            break;
+      }
+  }
 
   function getData(){
     // This function creates a new preset from UI data
@@ -612,7 +634,7 @@
     NewPreset.heightPercent  = parseFloat(heightPercent_editText.text);
     NewPreset.whiteBox       = whiteBG_checkBox.value;
     NewPreset.qZoneIndicator = quiet_checkBox.value;
-    NewPreset.humanReadable  = HumanRead_checkBox.value;
+    NewPreset.humanReadable  = humanReadBool(NewPreset.ean);
     NewPreset.dpi            = parseInt(dpi_editText.text);
     NewPreset.bwr            = {value: parseFloat(bwr_editText.text), unit: bwr_measureDrop.selection.text};
     NewPreset.alignTo        = alignTo_dropDown.selection.text;
@@ -621,7 +643,7 @@
     if( pageSelect_dropDown.visible ) {
       NewPreset.pageIndex    = pageSelect_dropDown.selection.index;
     }
-    
+
     return NewPreset;
   }
 
@@ -644,7 +666,7 @@
       heightPercent_editText.text   = String(p.heightPercent);
       whiteBG_checkBox.value        = p.whiteBox;
       quiet_checkBox.value          = p.qZoneIndicator;
-      HumanRead_checkBox.value      = p.humanReadable;
+      // HumanRead_checkBox.value      = p.humanReadable;
       dpi_editText.text             = p.dpi;
       bwr_editText.text             = p.bwr.value;
       bwr_measureDrop.selection     = idUtil.find(bwrUnits,       p.bwr.unit);

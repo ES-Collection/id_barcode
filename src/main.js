@@ -11,7 +11,7 @@
 function main(){
   // Get preset from user
   var userPreset = showDialog();
-
+  
   if( userPreset ) {
       BarcodeDrawer.drawBarcode( userPreset );
   } // else: user pressed cancel
