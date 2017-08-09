@@ -11,113 +11,6 @@ var BarcodeDrawer = (function () {
   var hpos;
   var presetString;
 
-  var getDimensions = function( options ) {
-      /*
-      
-      This function gets the dimensions for an EAN-13 barcode with addon
-      
-      Param: Options (Object): {dpi: integer, scale: integer (percent), heightAdjust:  integer (percent)} 
-      
-       Note: Values are in mm unless otherwise indicated
-
-      */
-
-      // Barcode Dimension Object (return)
-      var BD = new Object();
-
-      function fitDPI( VALUE_MM, DPI ) {
-          var value = parseFloat(VALUE_MM)/25.4; // Inches
-          var dpi   = parseInt(DPI);
-
-          var dotWidth = 1/dpi;
-          var dotCount = Math.floor( dpi * value );
-
-          var rasterSize = dotWidth * dotCount;
-          return rasterSize * 25.4; // in mm
-      }
-
-      BD.dpi = 0;
-      if( options && options.hasOwnProperty('dpi') ) {
-          BD.dpi = parseFloat(options.dpi);
-      }
-
-      BD.scale = 100; // Percentage
-      if( options && options.hasOwnProperty('scale') ) {
-          BD.scale = parseInt(options.scale);
-      }
-      
-      BD.scalePercent = parseFloat(BD.scale)/100;
-
-      // The recommended typeface for the Human Readable Interpretation is OCR-B at a height of 2.75mm
-      BD.fontHeight = 2.75 * BD.scalePercent;
-
-      BD.barsYoffset = 0;
-      if( options && options.hasOwnProperty('humanReadable') ) {
-            if( options.humanReadable ){
-                BD.barsYoffset = BD.fontHeight;
-            }
-      }
-
-      BD.barHeight = 22.85 * BD.scalePercent; // Height of normal bar (Not to be confused with guard bar)
-
-      if( options && options.hasOwnProperty('heightAdjust') ) {
-          BD.barHeight = (BD.barHeight/100) * options.heightAdjust;
-      }
-
-      BD.xDimension = 0.33 * BD.scalePercent; // X-dimension is the width of the thinnest bar
-      if( BD.dpi > 0 ) {
-          BD.xDimension = fitDPI( BD.xDimension, BD.dpi );
-      }
-
-      BD.quietZone = 7 * BD.xDimension; // Area of white space on either side of the bars. (X-dimension * 7 = Minimum)
-
-      // Width of all bars (including the width of the Left & Right Quiet Zones)
-      BD.digitWidth = 6 * BD.xDimension;
-      BD.guardWidth = 4 * BD.xDimension;
-      
-      BD.width = (12 * BD.digitWidth) + (3 * BD.guardWidth); // Width of bars including guards
-
-      BD.humanReadableWidth = BD.width + (2 * BD.quietZone) + (2 * BD.digitWidth);
-      BD.minBoxWidth        = BD.width + (2 * BD.quietZone) + (2 * BD.digitWidth) + (2 * BD.xDimension);
-
-      function addWidth( w ) {
-          BD.width       += w;
-          BD.minBoxWidth += w;
-      }
-
-      BD.guardBarOvershoot = 5 * BD.xDimension; // Specification specifies that barHeight is extended downward 5X: barHeight + (X-dimension * 5)  
-      BD.guardHeight = BD.barHeight + BD.guardBarOvershoot; 
-      BD.addonHeight = BD.barHeight - BD.fontHeight;
-
-      BD.height = BD.guardHeight; // Also called symbolHeight or guardHeight; 
-
-      BD.minBoxHeight = BD.barsYoffset + BD.barHeight + BD.fontHeight + (BD.xDimension * 2); // height incl. Machine Readable Numbers
-
-      BD.addonLen    = 0; // How many digits in the addon code
-      BD.addonGap    = BD.quietZone; // How much space bewteen the ean and addon code
-
-      if( options && options.hasOwnProperty('addonLen') ) {
-          BD.addonLen = parseInt(options.addonLen);
-          if( BD.addonLen > 0 ) {
-              // Add gap
-              addWidth( BD.addonGap );
-              // Start (5) + first digit (7) 
-              addWidth( BD.xDimension * 12 );
-              // Seperator (2) + next digits (7)
-              for(var x = BD.addonLen; x > 1; x--) {
-                addWidth( BD.xDimension * 9 );
-              }
-              addWidth( BD.quietZone + BD.xDimension );
-          }
-      }
-      
-      // Some positional markers that are handy to refer to
-      BD.yBottomBar  = BD.barsYoffset + BD.barHeight;
-      BD.startingpos = BD.xDimension;
-
-      return BD;
-  } // END getDimensions
-
   function getBWR_mm( bwrObj, DPI ) {
     switch( bwrObj.unit ) {
       case "dots":
@@ -292,8 +185,8 @@ var BarcodeDrawer = (function () {
       digit   = addonWidths[i][2]; //may be undefined
 
       if (digit) {
-        var textBox = drawChar(preset, hpos, digit, preset.codeFont, preset.codeFontSize-1, true );
-        textBox.textFramePreferences.verticalJustification = VerticalJustification.BOTTOM_ALIGN;
+        var textBox = drawChar(preset, hpos, digit, preset.codeFont, preset.codeFontSize-1, true, -BD.addonHeight-BD.fontHeight-BD.xDimension);
+        textBox.textFramePreferences.verticalJustification = VerticalJustification.CENTER_ALIGN;
         outline(preset, textBox);
       }
 
@@ -363,7 +256,7 @@ var BarcodeDrawer = (function () {
     var y = yOffset + BD.yBottomBar;
     var boxWidth = BD.digitWidth;
     var boxHeight = BD.fontHeight;
-    var textBox = drawText(x, y, boxWidth, boxHeight, character, font, fontSize, Justification.LEFT_ALIGN, VerticalJustification.BOTTOM_ALIGN);
+    var textBox = drawText(x, y, boxWidth, boxHeight, character, font, fontSize, Justification.LEFT_ALIGN, VerticalJustification.CENTER_ALIGN);
       textBox.parentStory.alignToBaseline = false;
     // We don't want lining figures!
     try {
@@ -393,24 +286,12 @@ var BarcodeDrawer = (function () {
     return whiteBox;
   }
 
-  function fitDPImm( VALUE_MM, DPI ) {
-    var value = parseFloat(VALUE_MM)/25.4; // Inches
-    var dpi   = parseInt(DPI);
+  function drawBarcode( preset ) {
+    var barcode     = Barcode().init( preset ); // barcode_library.js
+    var barWidths   = barcode.getNormalisedWidths();
+    var addonWidths = barcode.getNormalisedAddon();
 
-    var dotWidth = 1/dpi;
-    var dotCount = Math.floor( dpi * value );
-
-    var rasterSize = dotWidth * dotCount;
-    return rasterSize * 25.4; // in mm
-  }
-
-  function init( preset ) {
-
-    BD = getDimensions( { dpi           : preset.dpi,
-                          scale         : preset.scalePercent, 
-                          heightAdjust  : preset.heightPercent, 
-                          humanReadable : preset.humanReadable, 
-                          addonLen      : preset.addon.length} );
+    BD = barcode.getDimensions();
 
     startX = BD.xDimension;
     hpos   = startX;
@@ -418,14 +299,6 @@ var BarcodeDrawer = (function () {
     reduce = getBWR_mm( preset.bwr, preset.dpi ); // 10% dotgain == 0.1
     
     presetString = JSON.stringify( preset );
-  }
-
-  function drawBarcode( preset ) {
-    var barcode     = Barcode().init( preset ); // barcode_library.js
-    var barWidths   = barcode.getNormalisedWidths();
-    var addonWidths = barcode.getNormalisedAddon();
-
-    init(preset); // barcode_drawer.js
 
     doc = getCurrentOrNewDocument(preset, {  width : BD.minBoxWidth, height : BD.minBoxHeight });
 
