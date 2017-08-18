@@ -1,5 +1,5 @@
-InDesign Barcode Generator
-==========================
+InDesign Barcode Maker
+======================
 
 Easily generate EAN-13 based barcodes in InDesign.
 
@@ -32,10 +32,6 @@ InDesign Barcode maker can add a 2-digit EAN-2, or 5-digit EAN-5 supplemental ba
 ### Bar Width Adjustments (BWR)
 
 Bar Width Adjustment (also referred to as Bar Width Reduction, or BWR) is a method for adjusting the bars of a barcode to compensate for dot gain. You can enter the Bar Width Reduction in microns, milliinches (mil), millimeters or inches or actual dots.
-
-### Custom fonts
-
-You can choose any font you like. (OCR-B is recommended)
 
 ### Custom Height
 
