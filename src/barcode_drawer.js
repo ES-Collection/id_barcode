@@ -111,7 +111,7 @@ var BarcodeDrawer = (function () {
     drawGuard();
     hpos += BD.xDimension*2; // Guard plus space
     drawGuard();
-    hpos += BD.xDimension*2; // Guard plus space
+    hpos += BD.xDimension; // Guard
   }
 
   function midGuards() {
@@ -126,7 +126,7 @@ var BarcodeDrawer = (function () {
     drawGuard();
     hpos += BD.xDimension*2; // Guard plus space
     drawGuard();
-    hpos += BD.xDimension*2; // Guard plus space
+    hpos += BD.xDimension; // Guard
   }
 
   function outline(preset, textBox){
