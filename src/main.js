@@ -1,5 +1,6 @@
 ﻿#include 'header.js'
 #include 'presetManager.js'
+#include 'polyPlotter.js'
 #include 'fontDrop.js'
 #include 'idUtil.js'
 #include 'isbn.js'
