@@ -1,4 +1,4 @@
-﻿   /*
+﻿/*
 
     |I|d| |B|a|r|c|o|d|e|
 
@@ -62,5 +62,6 @@ var standardPreset = { name               : "Standard",
 
 var standardPresets = [standardPreset];
 
+// ------------------------
 // END of barcode_header.js
 

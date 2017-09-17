@@ -10,6 +10,7 @@ var BarcodeDrawer = (function () {
   var reduce;
   var hpos;
   var presetString;
+  var vShape = new polyPlotter();
 
   function getBWR_mm( bwrObj, DPI ) {
     switch( bwrObj.unit ) {
@@ -34,6 +35,10 @@ var BarcodeDrawer = (function () {
     // If we get here something went wrong
     alert("Not a valid BWR unit: " + bwrObj.unit );
     return 0;
+  }
+
+  function drawVbox( x, y, w, h ) {
+    vShape.addRect( x, y, w, h );
   }
 
   function drawBox(x, y, boxWidth, boxHeight, colour) {
@@ -89,22 +94,22 @@ var BarcodeDrawer = (function () {
     return doc;
   }
 
-  function drawBar(barWidth, barHeight, y) {
-    if (! barHeight) {
-      barHeight = BD.barHeight;
+  function drawVbar( w, h, y) {
+    if (! h) {
+      h = BD.barHeight;
     }
     if (! y) {
       y = BD.barsYoffset;
     }
-    drawBox(hpos + (reduce/2), y, barWidth - reduce, barHeight);
+    drawVbox(hpos + (reduce/2), y, w - reduce, h);
   }
 
   function drawAddonBar( addonWidth ) {
-    drawBar( addonWidth, BD.addonHeight, BD.barsYoffset + BD.fontHeight);
+    drawVbar( addonWidth, BD.addonHeight, BD.barsYoffset + BD.fontHeight);
   }
 
   function drawGuard() {
-    drawBar(BD.xDimension, BD.guardHeight);
+    drawVbar(BD.xDimension, BD.guardHeight);
   }
 
   function startGuards() {
@@ -159,7 +164,7 @@ var BarcodeDrawer = (function () {
       for (var j = 0; j < 4; j++) {
         barWidth = widths[j];
         if (pattern[j] === 1) {
-          drawBar(barWidth * BD.xDimension);
+          drawVbar(barWidth * BD.xDimension);
         }
         hpos += barWidth * BD.xDimension;
       }
@@ -290,6 +295,7 @@ var BarcodeDrawer = (function () {
     var barcode     = Barcode().init( preset ); // barcode_library.js
     var barWidths   = barcode.getNormalisedWidths();
     var addonWidths = barcode.getNormalisedAddon();
+    var barcodeFillSwatchName = "Barcode Bar Fill";
 
     BD = barcode.getDimensions();
 
@@ -317,6 +323,16 @@ var BarcodeDrawer = (function () {
 
     doc.layers.add({name: 'barcode'});
     layer = doc.layers.item('barcode');
+
+    var barStyle = {  
+        name          : barcodeFillSwatchName,  
+        enableFill    : true,
+        enableStroke  : true,
+        fillColor     : doc.swatches.itemByName('Black'),
+        strokeColor   : doc.swatches.itemByName('None'),    
+    }
+
+    var barsObjectStyle = doc.objectStyles.add( barStyle );
 
     bgSwatchName = 'None';
 
@@ -369,6 +385,8 @@ var BarcodeDrawer = (function () {
     if (addonWidths) {
       drawAddon(preset, addonWidths);
     }
+
+    vShape.drawToPage( doc.pages[0], {x: 0, y: 0, scale: 100, style: barcodeFillSwatchName } );
 
     var BarcodeGroup = page.groups.add(layer.allPageItems);
 
