@@ -6,8 +6,8 @@
 
     Bruno Herfst 2017
 
-    Version 1.2
-    
+    Version 1.2.1
+
     MIT license (MIT)
     
     https://github.com/GitBruno/ESPM
@@ -294,6 +294,10 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         function outOfRange( pos, len ) {
             var pos = parseInt(pos);
             var len = parseInt(len);
+            if( len == 0 ) {
+                // Everything is out of range :)
+                return true;
+            }
             if(pos > len) {
                 return true;
             }
@@ -344,7 +348,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
             // Sample usage: Espm.getPresetByIndex( 3 );
             var len = _Presets.length;
             if( outOfRange( position, len ) ) {
-                alert("Preset Manager\nThere is no preset at index " + i);
+                alert("Preset Manager\nThere is no preset at index " + position);
                 return false;
             }
             var i = calcIndex( parseInt(position), len );
@@ -650,7 +654,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         }
 
         WidgetCreator.attachTo = function ( SUI_Group, listKeyID, Port, Options ) {
-            var onloadIndex = 0;
+            var onloadIndex = null;
             listKey = String(listKeyID);
 
             if(! (Port && Port.hasOwnProperty('renderData') && Port.hasOwnProperty('getData')) ) {
@@ -761,7 +765,12 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
             }
             
             // Load selected dropdown
-            WidgetCreator.loadIndex( onloadIndex );
+            if( isNaN(onloadIndex) ) {
+                WidgetCreator.loadIndex( onloadIndex );
+            } else {
+                // AKA load session state
+                DataPort.renderUiPreset();
+            }
             return createMsg( true, "Done");
         }
 
