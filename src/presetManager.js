@@ -6,8 +6,8 @@
 
     Bruno Herfst 2017
 
-    Version 1.2.1
-
+    Version 1.2.3
+    
     MIT license (MIT)
     
     https://github.com/GitBruno/ESPM
@@ -153,7 +153,13 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
     function updatePreset ( oldPreset, ignoreKeys ) {
         var ignoreKeys = ignoreKeys || [];
         if(! ignoreKeys instanceof Array) {
-            throw "The function updatePreset expects ignoreKeys be type of array."
+            throw "The function updatePreset expects ignoreKeys to be instance of Array."
+        }
+        if( oldPreset == undefined ) {
+        	return Template.getInstance();
+        }
+        if(! oldPreset instanceof Object) {
+        	throw "The function updatePreset expects Preset to be instance of Object."
         }
         // Create a copy of the standard preset
         var newPreset  = Template.getInstance();
@@ -408,7 +414,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         }
 
         PresetsController.addUnique = function ( Preset, key, options ) {
-            // Sample usage: Espm.Presets.addUnique( Preset, 'name' );
+            // Sample usage: PresetManager.Presets.addUnique( Preset, 'name' );
             var silently = false;
             var position = -1;
 
@@ -435,7 +441,6 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
 
             var newLen = _Presets.length+1;
             PresetsController.add( Preset, {position: position} );
-
             return _Presets.length == newLen;
         }
         
@@ -641,16 +646,12 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         }
 
         WidgetCreator.loadIndex = function( i ) {
-            // Loads data in UiPreset and update UI
-            if ( i > 0 ) {
-                // Presets don't include [New Preset]
-                Espm.UiPreset.loadIndex( i-1 );
-            } else if ( i <= 0 ) {
-                // Get from back
-                Espm.UiPreset.loadIndex( i );
-            }
+            // Load data in UiPreset
+            Espm.UiPreset.loadIndex( i );
             // Update SUI
             DataPort.renderUiPreset();
+            presetsDrop.selection = getDropDownIndex( i+1, presetDropList.length );
+            return true;
         }
 
         WidgetCreator.attachTo = function ( SUI_Group, listKeyID, Port, Options ) {
@@ -719,14 +720,24 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
                 }
             }
 
-            WidgetCreator.reset = function() {
+            WidgetCreator.updatePresetsDrop = function( selectIndex ) {
+                // This function will update the drop down without updating UI input values
                 updateUI = false;
                 updatePresetData();
                 presetsDrop.removeAll();
-                for (var i=0, len=presetDropList.length; i<len; i++) {
+                var len = presetDropList.length; 
+                for (var i=0; i<len; i++) {
                     presetsDrop.add('item', presetDropList[i] );
-                };
+                }
+                presetsDrop.selection = isNaN(selectIndex) ? 0 : calcIndex( selectIndex, len );
                 updateUI = true;
+                return createMsg( true, "Done");
+            }
+
+            WidgetCreator.reset = function() {
+                // Update Presets Dropdown
+                WidgetCreator.updatePresetsDrop();
+                // Clear UI and update button states
                 presetsDrop.selection = 0;
                 return createMsg( true, "Done");
             }
@@ -746,7 +757,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
                         return _addUiPresetToPresets();
                     }
                     Espm.UiPreset.setProp( listKey, presetName );
-                    // Optional?
+                    // Add preset to end
                     Espm.Presets.addUnique( Espm.UiPreset.get(), listKey, {position:-1} );
                     WidgetCreator.reset();
                     presetsDrop.selection = presetsDrop.items.length-1;
