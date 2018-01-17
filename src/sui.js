@@ -1,4 +1,5 @@
 ﻿function showDialog( presetIndex ) {
+
   var onloadIndex = presetIndex || 0;
   var userChange  = true;
 
@@ -10,6 +11,16 @@
   /*
       Try and load extra presets from active document
   */
+  var selectionDetails = {
+    units    : 'mm',
+    bounds   : [0,0,0,0],
+    pageIndex: 0 }
+  
+  var barcodeBoxDetails = {
+    units    : 'mm',
+    bounds   : [0,0,0,0],
+    pageIndex: 0 }
+
   var activeDoc = app.documents[0];
 
   var selectionBounds, pageBounds, marginBounds = [0,0,0,0];
@@ -48,15 +59,86 @@
       }
       return MyPreset;
     }
+    
+    // Check if there are any barcode boxes
+    var barcode_boxes = idUtil.getItemsByLabel(activeDoc, "barcode_box");
+    if( barcode_boxes.length > 0 ) {
+      var barcode_box = barcode_boxes[0];
 
-    // Get existing barcodes in document andd add their settings to presets
+      // Save activeDocPreset.selectionBounds
+      var originalRulers = idUtil.setRuler(activeDoc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
+      barcodeBoxDetails.bounds = barcode_box.geometricBounds;
+      idUtil.setRuler(activeDoc, originalRulers);
+      alignToOptions.push("Barcode Box");
+
+      Pm.UiPreset.setProp("alignTo", "Barcode Box");
+      var selectionParentPage = barcode_box.parentPage.name;
+      // Let’s see which page contains selection
+      for (var j=0; j<=list_of_pages.length-1; j++){
+        if(list_of_pages[j] == selectionParentPage){
+          Pm.UiPreset.setProp("pageIndex", j);
+          break;
+        }
+      }
+    }
+
+    // Check if there is a selection
+    if( app.selection.length > 0 ) {
+      var validatedSelection = [];
+      for (var i = 0; i < app.selection.length; i++) { 
+          switch (app.selection[i].constructor.name){
+            case "Rectangle":
+            case "TextFrame":
+            case "Oval":
+            case "Polygon":
+            case "GraphicLine":
+            case "Group":
+            case "PageItem":
+              // Don't process items that are on the pasteboard
+              if ( app.selection[0].parentPage ) {
+                validatedSelection.push(app.selection[i]);
+              }
+              break;
+            default:
+              break;
+          } 
+      }
+    
+      if( validatedSelection.length > 0 ) {
+        // Save activeDocPreset.selectionBounds
+        var originalRulers = idUtil.setRuler(activeDoc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
+        selectionDetails.bounds = idUtil.getMaxBounds( validatedSelection );
+        idUtil.setRuler(activeDoc, originalRulers);
+        alignToOptions.push('Selection');
+        
+        Pm.UiPreset.setProp("alignTo", "Selection");
+        // Let’s see which page contains selection
+        var selectionParentPage = app.selection[0].parentPage.name;
+        for (var j=0; j<=list_of_pages.length-1; j++){
+          if(list_of_pages[j] == selectionParentPage){
+            selectionDetails.pageIndex = j;
+            break;
+          }
+        }  
+      }
+
+    } // END check selection
+    
+    
+    // Get existing barcodes in document and add their settings to presets
     var existingBarcodes = idUtil.getItemsByName(activeDoc, "Barcode_Settings");
     if(existingBarcodes.length > 0) {
+      //alignToOptions.push("Barcode Box");
       for (i = 0; i < existingBarcodes.length; i++) { 
         var eBarcodePreset = getBarcodePreset(existingBarcodes[i]);
         if( eBarcodePreset ) {
             eBarcodePreset.name = "[ "+ eBarcodePreset.ean +" ]";
-            eBarcodePreset = updatePageNumber( eBarcodePreset );
+            //eBarcodePreset.alignTo = "Barcode Box";
+            eBarcodePreset = updatePageNumber( eBarcodePreset );            
+            // Save activeDocPreset.selectionBounds
+            var originalRulers = idUtil.setRuler(activeDoc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
+            eBarcodePreset.bounds = idUtil.getMaxBounds( [existingBarcodes[i]] );
+            idUtil.setRuler(activeDoc, originalRulers);
             // Temporary preset so it will not be saved to disk
             Pm.Presets.add(eBarcodePreset, {position: 0, temporary: true} );
         }
@@ -74,54 +156,10 @@
         activeDocPreset.ean = tempData;
         activeDocPreset = updatePageNumber( activeDocPreset );
       }
+      
       // Save
       Pm.Presets.add(activeDocPreset, {position: 0, temporary: true});
     } // End existing barcodes
-
-    // see if there is a barcode box on active spread
-    var barcode_boxes = idUtil.getItemsByLabel(app.activeWindow.activeSpread, "barcode_box");
-    if( barcode_boxes.length > 0 ) {
-      barcode_box = barcode_boxes[0];
-      alignToOptions.push("barcode_box");
-      Pm.UiPreset.setProp("alignTo", "barcode_box");
-      var selectionParentPage = barcode_box.parentPage.name;
-      // Let’s see which page contains selection
-      for (var j=0; j<=list_of_pages.length-1; j++){
-        if(list_of_pages[j] == selectionParentPage){
-          Pm.UiPreset.setProp("pageIndex", j);
-          break;
-        }
-      }
-    }
-
-    // Check if there is a selection
-    if( app.selection.length > 0 ) {
-      switch (app.selection[0].constructor.name){
-        case "Rectangle":
-        case "TextFrame":
-        case "Oval":
-        case "Polygon":
-        case "GraphicLine":
-        case "Group":
-        case "PageItem":
-          // Don't process items that are on the pasteboard
-          if ( app.selection[0].parentPage ) {
-            alignToOptions.push('Selection');
-            Pm.UiPreset.setProp('alignTo', 'Selection');
-            var selectionParentPage = app.selection[0].parentPage.name;
-            // Let’s see which page contains selection
-            for (var j=0; j<=list_of_pages.length-1; j++){
-              if(list_of_pages[j] == selectionParentPage){
-                Pm.UiPreset.setProp("pageIndex", j);
-                break;
-              }
-            }
-          }
-          break;
-        default:
-          break;
-      }
-    } // END check selection
     
   } //END checkActiveDoc
 
@@ -762,14 +800,10 @@
         return showDialog(-1); // Restart
     }
 
-    if( preset.alignTo == "barcode_box" ) {
-      var originalRulers = idUtil.setRuler(preset.doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
-      preset.selectionBounds = preset.barcode_box.visibleBounds;
-      idUtil.setRuler(preset.doc, originalRulers);
-    } else if( preset.alignTo == "Selection" ) {
-      var originalRulers = idUtil.setRuler(preset.doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
-      preset.selectionBounds = idUtil.getMaxBounds( app.selection );
-      idUtil.setRuler(preset.doc, originalRulers);
+    if( preset.alignTo === "Selection" ) {
+      preset.selectionBounds = selectionDetails.bounds;
+    } else if( preset.alignTo === "Barcode Box" ) {
+      preset.selectionBounds = barcodeBoxDetails.bounds;
     } else {
       preset.selectionBounds = [0,0,0,0];
     }

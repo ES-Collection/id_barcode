@@ -361,7 +361,7 @@ var polyPlotter = function( options ) {
 
     Bruno Herfst 2017
 
-    Version 1.2
+    Version 1.2.3
     
     MIT license (MIT)
     
@@ -508,7 +508,13 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
     function updatePreset ( oldPreset, ignoreKeys ) {
         var ignoreKeys = ignoreKeys || [];
         if(! ignoreKeys instanceof Array) {
-            throw "The function updatePreset expects ignoreKeys be type of array."
+            throw "The function updatePreset expects ignoreKeys to be instance of Array."
+        }
+        if( oldPreset == undefined ) {
+        	return Template.getInstance();
+        }
+        if(! oldPreset instanceof Object) {
+        	throw "The function updatePreset expects Preset to be instance of Object."
         }
         // Create a copy of the standard preset
         var newPreset  = Template.getInstance();
@@ -649,6 +655,10 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         function outOfRange( pos, len ) {
             var pos = parseInt(pos);
             var len = parseInt(len);
+            if( len == 0 ) {
+                // Everything is out of range :)
+                return true;
+            }
             if(pos > len) {
                 return true;
             }
@@ -699,7 +709,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
             // Sample usage: Espm.getPresetByIndex( 3 );
             var len = _Presets.length;
             if( outOfRange( position, len ) ) {
-                alert("Preset Manager\nThere is no preset at index " + i);
+                alert("Preset Manager\nThere is no preset at index " + position);
                 return false;
             }
             var i = calcIndex( parseInt(position), len );
@@ -759,7 +769,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         }
 
         PresetsController.addUnique = function ( Preset, key, options ) {
-            // Sample usage: Espm.Presets.addUnique( Preset, 'name' );
+            // Sample usage: PresetManager.Presets.addUnique( Preset, 'name' );
             var silently = false;
             var position = -1;
 
@@ -786,7 +796,6 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
 
             var newLen = _Presets.length+1;
             PresetsController.add( Preset, {position: position} );
-
             return _Presets.length == newLen;
         }
         
@@ -992,20 +1001,16 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         }
 
         WidgetCreator.loadIndex = function( i ) {
-            // Loads data in UiPreset and update UI
-            if ( i > 0 ) {
-                // Presets don't include [New Preset]
-                Espm.UiPreset.loadIndex( i-1 );
-            } else if ( i <= 0 ) {
-                // Get from back
-                Espm.UiPreset.loadIndex( i );
-            }
+            // Load data in UiPreset
+            Espm.UiPreset.loadIndex( i );
             // Update SUI
             DataPort.renderUiPreset();
+            presetsDrop.selection = getDropDownIndex( i+1, presetDropList.length );
+            return true;
         }
 
         WidgetCreator.attachTo = function ( SUI_Group, listKeyID, Port, Options ) {
-            var onloadIndex = 0;
+            var onloadIndex = null;
             listKey = String(listKeyID);
 
             if(! (Port && Port.hasOwnProperty('renderData') && Port.hasOwnProperty('getData')) ) {
@@ -1070,14 +1075,24 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
                 }
             }
 
-            WidgetCreator.reset = function() {
+            WidgetCreator.updatePresetsDrop = function( selectIndex ) {
+                // This function will update the drop down without updating UI input values
                 updateUI = false;
                 updatePresetData();
                 presetsDrop.removeAll();
-                for (var i=0, len=presetDropList.length; i<len; i++) {
+                var len = presetDropList.length; 
+                for (var i=0; i<len; i++) {
                     presetsDrop.add('item', presetDropList[i] );
-                };
+                }
+                presetsDrop.selection = isNaN(selectIndex) ? 0 : calcIndex( selectIndex, len );
                 updateUI = true;
+                return createMsg( true, "Done");
+            }
+
+            WidgetCreator.reset = function() {
+                // Update Presets Dropdown
+                WidgetCreator.updatePresetsDrop();
+                // Clear UI and update button states
                 presetsDrop.selection = 0;
                 return createMsg( true, "Done");
             }
@@ -1097,7 +1112,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
                         return _addUiPresetToPresets();
                     }
                     Espm.UiPreset.setProp( listKey, presetName );
-                    // Optional?
+                    // Add preset to end
                     Espm.Presets.addUnique( Espm.UiPreset.get(), listKey, {position:-1} );
                     WidgetCreator.reset();
                     presetsDrop.selection = presetsDrop.items.length-1;
@@ -1116,7 +1131,12 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
             }
             
             // Load selected dropdown
-            WidgetCreator.loadIndex( onloadIndex );
+            if( isNaN(onloadIndex) ) {
+                WidgetCreator.loadIndex( onloadIndex );
+            } else {
+                // AKA load session state
+                DataPort.renderUiPreset();
+            }
             return createMsg( true, "Done");
         }
 
@@ -1195,7 +1215,10 @@ if(typeof JSON!=='object'){JSON={};}(function(){'use strict';function f(n){retur
 //----------------------------------------------------------------------------------
 
 
-﻿var idUtil = new Object();
+﻿// Bruno Herfst 2018
+// v1.1
+
+var idUtil = new Object();
 
 idUtil.getBoundsInfo = function (bounds){
       // This functions receives bounds (y1, x1, y2, x2)
@@ -1222,7 +1245,7 @@ idUtil.getBoundsInfo = function (bounds){
 }
 
 idUtil.setRuler = function (doc, myNewUnits){
-        
+
     // This function sets the rulers to the disired measure units
     // and returns the original preset that you can send back to
     // this function to reset the rulers.
@@ -1456,8 +1479,8 @@ idUtil.calcOffset = function (itemBounds, page, preset){
   var ib = idUtil.getBoundsInfo(itemBounds);
   var pb = idUtil.getBoundsInfo(page.bounds);
 
-  if(preset.alignTo == "barcode_box"){
-    // Now lets add it to the offsets
+  if(preset.alignTo == "Barcode Box"){
+    // Add to offsets
     preset.offset.x += preset.selectionBounds[1];
     preset.offset.y += preset.selectionBounds[0];
     pb = idUtil.getBoundsInfo(preset.selectionBounds);
@@ -1628,6 +1651,56 @@ idUtil.calcOffset = function (itemBounds, page, preset){
   ib.bounds = addToBounds(ib.bounds, preset.offset.x, preset.offset.y);
   return ib.bounds;
 };
+
+//-----------------------------------------------------------------------------------
+//  LAYER TOOLS
+//-----------------------------------------------------------------------------------
+function getSelectAndMoveLayer(doc, name, afterlayerNo){
+    return moveLayer(getAndSelectLayer(doc, name), afterlayerNo);
+}
+function getAndSelectLayer(doc, name) {
+    return selectLayer(doc, getLayer(doc, name));
+}
+function getLayer(doc, name) {
+    for (i=0; i<doc.layers.length-1; i++) {
+        if (doc.layers[i].name===name) return doc.layers[i];
+    }
+    return doc.layers.add({name:name});
+}
+function selectLayer(doc, layer){
+    doc.activeLayer = layer;
+    return layer;
+}
+function selectTopLayer(doc) {
+  return selectLayer(doc, doc.layers.firstItem());
+}
+function moveLayer(layer, afterlayerNo){
+    try {
+        layer.move(LocationOptions.AFTER,layer.parent.layers[afterlayerNo]);
+        return layer
+    } catch (e) {
+        alert("CoverBuilder.Tools MoveLayer\n" + e.message +  " (Line " + e.line + " in file " + e.fileName + ")");
+    }
+}
+
+function layerLocked(myLayer, givenLock){
+    // givenLock: True:  Layer will be locked
+    // givenLock: False: Layer will be unlocked
+    originalLock = myLayer.locked;
+
+    if(givenLock == undefined){
+        // Toggle!
+        var givenLock = !originalLock;
+    }
+
+    if(givenLock){
+        myLayer.locked = true;
+        return originalLock;
+    } else {
+        myLayer.locked = false;
+        return originalLock;
+    }
+}
 
 // END id_Util.js
 
@@ -3459,6 +3532,7 @@ function FontSelect(group, font, resetPresetDropdown) {
 
 
 ﻿function showDialog( presetIndex ) {
+
   var onloadIndex = presetIndex || 0;
   var userChange  = true;
 
@@ -3470,6 +3544,16 @@ function FontSelect(group, font, resetPresetDropdown) {
   /*
       Try and load extra presets from active document
   */
+  var selectionDetails = {
+    units    : 'mm',
+    bounds   : [0,0,0,0],
+    pageIndex: 0 }
+  
+  var barcodeBoxDetails = {
+    units    : 'mm',
+    bounds   : [0,0,0,0],
+    pageIndex: 0 }
+
   var activeDoc = app.documents[0];
 
   var selectionBounds, pageBounds, marginBounds = [0,0,0,0];
@@ -3508,15 +3592,86 @@ function FontSelect(group, font, resetPresetDropdown) {
       }
       return MyPreset;
     }
+    
+    // Check if there are any barcode boxes
+    var barcode_boxes = idUtil.getItemsByLabel(activeDoc, "barcode_box");
+    if( barcode_boxes.length > 0 ) {
+      var barcode_box = barcode_boxes[0];
 
-    // Get existing barcodes in document andd add their settings to presets
+      // Save activeDocPreset.selectionBounds
+      var originalRulers = idUtil.setRuler(activeDoc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
+      barcodeBoxDetails.bounds = barcode_box.geometricBounds;
+      idUtil.setRuler(activeDoc, originalRulers);
+      alignToOptions.push("Barcode Box");
+
+      Pm.UiPreset.setProp("alignTo", "Barcode Box");
+      var selectionParentPage = barcode_box.parentPage.name;
+      // Let’s see which page contains selection
+      for (var j=0; j<=list_of_pages.length-1; j++){
+        if(list_of_pages[j] == selectionParentPage){
+          Pm.UiPreset.setProp("pageIndex", j);
+          break;
+        }
+      }
+    }
+
+    // Check if there is a selection
+    if( app.selection.length > 0 ) {
+      var validatedSelection = [];
+      for (var i = 0; i < app.selection.length; i++) { 
+          switch (app.selection[i].constructor.name){
+            case "Rectangle":
+            case "TextFrame":
+            case "Oval":
+            case "Polygon":
+            case "GraphicLine":
+            case "Group":
+            case "PageItem":
+              // Don't process items that are on the pasteboard
+              if ( app.selection[0].parentPage ) {
+                validatedSelection.push(app.selection[i]);
+              }
+              break;
+            default:
+              break;
+          } 
+      }
+    
+      if( validatedSelection.length > 0 ) {
+        // Save activeDocPreset.selectionBounds
+        var originalRulers = idUtil.setRuler(activeDoc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
+        selectionDetails.bounds = idUtil.getMaxBounds( validatedSelection );
+        idUtil.setRuler(activeDoc, originalRulers);
+        alignToOptions.push('Selection');
+        
+        Pm.UiPreset.setProp("alignTo", "Selection");
+        // Let’s see which page contains selection
+        var selectionParentPage = app.selection[0].parentPage.name;
+        for (var j=0; j<=list_of_pages.length-1; j++){
+          if(list_of_pages[j] == selectionParentPage){
+            selectionDetails.pageIndex = j;
+            break;
+          }
+        }  
+      }
+
+    } // END check selection
+    
+    
+    // Get existing barcodes in document and add their settings to presets
     var existingBarcodes = idUtil.getItemsByName(activeDoc, "Barcode_Settings");
     if(existingBarcodes.length > 0) {
+      //alignToOptions.push("Barcode Box");
       for (i = 0; i < existingBarcodes.length; i++) { 
         var eBarcodePreset = getBarcodePreset(existingBarcodes[i]);
         if( eBarcodePreset ) {
             eBarcodePreset.name = "[ "+ eBarcodePreset.ean +" ]";
-            eBarcodePreset = updatePageNumber( eBarcodePreset );
+            //eBarcodePreset.alignTo = "Barcode Box";
+            eBarcodePreset = updatePageNumber( eBarcodePreset );            
+            // Save activeDocPreset.selectionBounds
+            var originalRulers = idUtil.setRuler(activeDoc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
+            eBarcodePreset.bounds = idUtil.getMaxBounds( [existingBarcodes[i]] );
+            idUtil.setRuler(activeDoc, originalRulers);
             // Temporary preset so it will not be saved to disk
             Pm.Presets.add(eBarcodePreset, {position: 0, temporary: true} );
         }
@@ -3534,54 +3689,10 @@ function FontSelect(group, font, resetPresetDropdown) {
         activeDocPreset.ean = tempData;
         activeDocPreset = updatePageNumber( activeDocPreset );
       }
+      
       // Save
       Pm.Presets.add(activeDocPreset, {position: 0, temporary: true});
     } // End existing barcodes
-
-    // see if there is a barcode box on active spread
-    var barcode_boxes = idUtil.getItemsByLabel(app.activeWindow.activeSpread, "barcode_box");
-    if( barcode_boxes.length > 0 ) {
-      barcode_box = barcode_boxes[0];
-      alignToOptions.push("barcode_box");
-      Pm.UiPreset.setProp("alignTo", "barcode_box");
-      var selectionParentPage = barcode_box.parentPage.name;
-      // Let’s see which page contains selection
-      for (var j=0; j<=list_of_pages.length-1; j++){
-        if(list_of_pages[j] == selectionParentPage){
-          Pm.UiPreset.setProp("pageIndex", j);
-          break;
-        }
-      }
-    }
-
-    // Check if there is a selection
-    if( app.selection.length > 0 ) {
-      switch (app.selection[0].constructor.name){
-        case "Rectangle":
-        case "TextFrame":
-        case "Oval":
-        case "Polygon":
-        case "GraphicLine":
-        case "Group":
-        case "PageItem":
-          // Don't process items that are on the pasteboard
-          if ( app.selection[0].parentPage ) {
-            alignToOptions.push('Selection');
-            Pm.UiPreset.setProp('alignTo', 'Selection');
-            var selectionParentPage = app.selection[0].parentPage.name;
-            // Let’s see which page contains selection
-            for (var j=0; j<=list_of_pages.length-1; j++){
-              if(list_of_pages[j] == selectionParentPage){
-                Pm.UiPreset.setProp("pageIndex", j);
-                break;
-              }
-            }
-          }
-          break;
-        default:
-          break;
-      }
-    } // END check selection
     
   } //END checkActiveDoc
 
@@ -4222,14 +4333,10 @@ function FontSelect(group, font, resetPresetDropdown) {
         return showDialog(-1); // Restart
     }
 
-    if( preset.alignTo == "barcode_box" ) {
-      var originalRulers = idUtil.setRuler(preset.doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
-      preset.selectionBounds = preset.barcode_box.visibleBounds;
-      idUtil.setRuler(preset.doc, originalRulers);
-    } else if( preset.alignTo == "Selection" ) {
-      var originalRulers = idUtil.setRuler(preset.doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
-      preset.selectionBounds = idUtil.getMaxBounds( app.selection );
-      idUtil.setRuler(preset.doc, originalRulers);
+    if( preset.alignTo === "Selection" ) {
+      preset.selectionBounds = selectionDetails.bounds;
+    } else if( preset.alignTo === "Barcode Box" ) {
+      preset.selectionBounds = barcodeBoxDetails.bounds;
     } else {
       preset.selectionBounds = [0,0,0,0];
     }
@@ -4287,7 +4394,7 @@ var BarcodeDrawer = (function () {
     vShape.addRect( x, y, w, h );
   }
 
-  function drawBox(x, y, boxWidth, boxHeight, colour) {
+  function drawBox(page, x, y, boxWidth, boxHeight, colour) {
     var rect = page.rectangles.add();
     rect.appliedObjectStyle = doc.objectStyles.item(0);
     rect.strokeWeight = 0;
@@ -4297,47 +4404,53 @@ var BarcodeDrawer = (function () {
     return rect;
   }
 
-  function getCurrentOrNewDocument(preset, size) {
-    var doc = undefined;
-    try {
-      var doc = app.activeDoc;
-    } catch (noDocOpen) {
-      var originalMarginPreference = {
-        top    : app.marginPreferences.top,
-        left   : app.marginPreferences.left,
-        bottom : app.marginPreferences.bottom,
-        right  : app.marginPreferences.right
-      };
+  function getNewDocument(preset, size, hide){
+    var hiding = false === hide; 
+    var originalMarginPreference = {
+      top    : app.marginPreferences.top,
+      left   : app.marginPreferences.left,
+      bottom : app.marginPreferences.bottom,
+      right  : app.marginPreferences.right
+    };
 
-      app.marginPreferences.top    = 0;
-      app.marginPreferences.left   = 0;
-      app.marginPreferences.bottom = 0;
-      app.marginPreferences.right  = 0;
+    app.marginPreferences.top    = 0;
+    app.marginPreferences.left   = 0;
+    app.marginPreferences.bottom = 0;
+    app.marginPreferences.right  = 0;
 
-      doc = app.documents.add();
-      doc.insertLabel('build_by_ean13barcodegenerator', 'true');
+    var d = app.documents.add( !hiding );
+    d.insertLabel('build_by_ean13barcodegenerator', 'true');
+    d.insertLabel('EAN-13', preset.ean);
 
-      doc.viewPreferences.horizontalMeasurementUnits = MeasurementUnits.MILLIMETERS;
-      doc.viewPreferences.verticalMeasurementUnits   = MeasurementUnits.MILLIMETERS;
-      doc.viewPreferences.rulerOrigin                = RulerOrigin.pageOrigin;
+    d.viewPreferences.horizontalMeasurementUnits = MeasurementUnits.MILLIMETERS;
+    d.viewPreferences.verticalMeasurementUnits   = MeasurementUnits.MILLIMETERS;
+    d.viewPreferences.rulerOrigin                = RulerOrigin.pageOrigin;
 
-      doc.documentPreferences.facingPages      = false;
-      doc.documentPreferences.pagesPerDocument = 1;
+    d.documentPreferences.facingPages      = false;
+    d.documentPreferences.pagesPerDocument = 1;
 
-      if (typeof size != "undefined") {
-        doc.documentPreferences.pageWidth   = size.width;
-        doc.documentPreferences.pageHeight  = size.height;
-      }
-
-      //Reset the application default margin preferences to their former state.
-      app.marginPreferences.top    = originalMarginPreference.top   ;
-      app.marginPreferences.left   = originalMarginPreference.left  ;
-      app.marginPreferences.bottom = originalMarginPreference.bottom;
-      app.marginPreferences.right  = originalMarginPreference.right ;
+    if (typeof size != "undefined") {
+      d.documentPreferences.pageWidth   = size.width;
+      d.documentPreferences.pageHeight  = size.height;
     }
-    
-    doc.insertLabel('EAN-13', preset.ean);
-    return doc;
+
+    //Reset the application default margin preferences to their former state.
+    app.marginPreferences.top    = originalMarginPreference.top   ;
+    app.marginPreferences.left   = originalMarginPreference.left  ;
+    app.marginPreferences.bottom = originalMarginPreference.bottom;
+    app.marginPreferences.right  = originalMarginPreference.right ;
+
+    return d;
+  }
+
+  function getCurrentOrNewDocument(preset, size) {
+    var d = app.documents[0];
+    if (!d.isValid) {
+      d = getNewDocument(preset, size);
+    } else {
+      d.insertLabel('EAN-13', preset.ean);
+    }
+    return d;
   }
 
   function drawVbar( w, h, y) {
@@ -4394,7 +4507,7 @@ var BarcodeDrawer = (function () {
     return [textBox];
   }
 
-  function drawMain(preset, barWidths) {
+  function drawMain(page, preset, barWidths) {
     var pattern = null;
     var widths = null;
     var barWidth = null;
@@ -4405,7 +4518,7 @@ var BarcodeDrawer = (function () {
       widths   = barWidths[i][1];
       digit    = barWidths[i][2];
 
-      outline( preset, drawChar(preset, hpos, digit, preset.codeFont, fontSize, true) );
+      outline( preset, drawChar(page, preset, hpos, digit, preset.codeFont, fontSize, true) );
 
       for (var j = 0; j < 4; j++) {
         barWidth = widths[j];
@@ -4421,7 +4534,7 @@ var BarcodeDrawer = (function () {
     return fontSize;
   }
 
-  function drawAddon(preset, addonWidths) {
+  function drawAddon(page, preset, addonWidths) {
     var pattern = null;
     var widths  = null;
     var aWidth  = null;
@@ -4436,7 +4549,7 @@ var BarcodeDrawer = (function () {
       digit   = addonWidths[i][2]; //may be undefined
 
       if (digit) {
-        var textBox = drawChar(preset, hpos, digit, preset.codeFont, preset.codeFontSize-1, true, -BD.addonHeight-BD.fontHeight-BD.xDimension);
+        var textBox = drawChar(page, preset, hpos, digit, preset.codeFont, preset.codeFontSize-1, true, -BD.addonHeight-BD.fontHeight-BD.xDimension);
         textBox.textFramePreferences.verticalJustification = VerticalJustification.CENTER_ALIGN;
         outline(preset, textBox);
       }
@@ -4481,7 +4594,7 @@ var BarcodeDrawer = (function () {
     return fontSize;
   }
 
-  function drawText(x, y, boxWidth, boxHeight, text, font, fontSize, textAlign, frameAlign) {
+  function drawText(page, x, y, boxWidth, boxHeight, text, font, fontSize, textAlign, frameAlign) {
     try {
       var textBox = page.textFrames.add();
       textBox.appliedObjectStyle = doc.objectStyles.item(0);
@@ -4502,12 +4615,12 @@ var BarcodeDrawer = (function () {
     }
   }
 
-  function drawChar(preset, x, character, font, fontSize, fitBox, yOffset) {
+  function drawChar(page, preset, x, character, font, fontSize, fitBox, yOffset) {
     var yOffset = yOffset || 0;
     var y = yOffset + BD.yBottomBar;
     var boxWidth = BD.digitWidth;
     var boxHeight = BD.fontHeight;
-    var textBox = drawText(x, y, boxWidth, boxHeight, character, font, fontSize, Justification.LEFT_ALIGN, VerticalJustification.CENTER_ALIGN);
+    var textBox = drawText(page, x, y, boxWidth, boxHeight, character, font, fontSize, Justification.LEFT_ALIGN, VerticalJustification.CENTER_ALIGN);
       textBox.parentStory.alignToBaseline = false;
     // We don't want lining figures!
     try {
@@ -4524,15 +4637,15 @@ var BarcodeDrawer = (function () {
     return textBox;
   }
 
-  function savePresets() {
-    var savePresetBox = drawBox(hpos - startX, 0, BD.minBoxWidth, BD.minBoxHeight, 'None');
+  function savePresets(page) {
+    var savePresetBox = drawBox(page, hpos - startX, 0, BD.minBoxWidth, BD.minBoxHeight, 'None');
         savePresetBox.label = presetString;
         savePresetBox.name  = "Barcode_Settings";
     return savePresetBox;
   }
 
-  function drawWhiteBox() {
-    var whiteBox = drawBox(0, 0, BD.minBoxWidth, BD.minBoxHeight, bgSwatchName);
+  function drawWhiteBox(page) {
+    var whiteBox = drawBox(page, 0, 0, BD.minBoxWidth, BD.minBoxHeight, bgSwatchName);
     whiteBox.label = "barcode_whiteBox";
     return whiteBox;
   }
@@ -4551,24 +4664,17 @@ var BarcodeDrawer = (function () {
     reduce = getBWR_mm( preset.bwr, preset.dpi ); // 10% dotgain == 0.1
     
     presetString = JSON.stringify( preset );
+    var BarcodeSize = {  width : BD.minBoxWidth, height : BD.minBoxHeight };
 
-    doc = getCurrentOrNewDocument(preset, {  width : BD.minBoxWidth, height : BD.minBoxHeight });
+    var targetDoc = getCurrentOrNewDocument(preset, BarcodeSize);
+    var targetID  = targetDoc.id;
 
-    if( (preset.pageIndex < 0) || (preset.pageIndex > doc.pages.length-1) ) {
-      page = doc.pages[0];
-    } else {
-      page = doc.pages[preset.pageIndex];
-    }
-
-    originalRulers = idUtil.setRuler(doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
+    // Create a temp doc to draw the barcode in
+    doc = getNewDocument(preset, BarcodeSize, false);
+  
+    page = doc.pages[0];
     
-    layer = doc.layers.item('barcode');    
-    if (layer.isValid) {
-      layer.remove();
-    }
-
-    doc.layers.add({name: 'barcode'});
-    layer = doc.layers.item('barcode');
+    var layer = doc.layers.add({name: 'barcode'});
 
     var barStyle = {  
         name          : barcodeFillSwatchName,  
@@ -4578,7 +4684,10 @@ var BarcodeDrawer = (function () {
         strokeColor   : doc.swatches.itemByName('None'),    
     }
 
-    var barsObjectStyle = doc.objectStyles.add( barStyle );
+    var barsObjectStyle = doc.objectStyles.item(barcodeFillSwatchName);
+    if(! barsObjectStyle.isValid ) {
+      barsObjectStyle = doc.objectStyles.add( barStyle );
+    }
 
     bgSwatchName = 'None';
 
@@ -4588,14 +4697,14 @@ var BarcodeDrawer = (function () {
 
     var barcodeElements = new Array();
 
-    drawWhiteBox();
+    drawWhiteBox(page);
     
-    savePresets();
+    savePresets(page);
 
     // calculate the initial fontsize 
     // and use this size to draw the other characters
     // this makes sure all numbers are the same size
-    var textBox = drawChar(preset, hpos, preset.ean[0], preset.codeFont, 20, false); //initial '9'
+    var textBox = drawChar(page, preset, hpos, preset.ean[0], preset.codeFont, 20, false); //initial '9'
     fontSize = fitTextBox(textBox, true, true); // Fit type size
 
     outline(preset, textBox);
@@ -4604,16 +4713,17 @@ var BarcodeDrawer = (function () {
     startX += BD.digitWidth + BD.xDimension;
 
     startGuards();
-    preset.codeFontSize = drawMain(preset, barWidths);
+    preset.codeFontSize = drawMain(page, preset, barWidths);
+
     endGuards();
 
     if(preset.qZoneIndicator) {
-      var textBox = drawChar(preset, hpos, '>', preset.codeFont, preset.codeFontSize, true); //quiet zone indicator '>'
+      var textBox = drawChar(page, preset, hpos, '>', preset.codeFont, preset.codeFontSize, true); //quiet zone indicator '>'
       var elements = outline(preset, textBox);
     }
 
     if(preset.humanReadable && preset.humanReadableStr.length > 0) {
-      var textBox = drawText( BD.startingpos, 0, BD.humanReadableWidth, BD.barsYoffset, 
+      var textBox = drawText(page, BD.startingpos, 0, BD.humanReadableWidth, BD.barsYoffset, 
         preset.humanReadableStr, preset.readFont, 20, Justification.FULLY_JUSTIFIED, VerticalJustification.CENTER_ALIGN);
 
       try {
@@ -4629,7 +4739,7 @@ var BarcodeDrawer = (function () {
     }
 
     if (addonWidths) {
-      drawAddon(preset, addonWidths);
+      drawAddon(page, preset, addonWidths);
     }
 
     vShape.drawToPage( doc.pages[0], {x: 0, y: 0, scale: 100, style: barcodeFillSwatchName } );
@@ -4638,12 +4748,30 @@ var BarcodeDrawer = (function () {
 
     BarcodeGroup.label = "Barcode_Complete";
 
+    // Now we have finished drawing we can move and position barcode in targetDoc
+    var targetDoc = app.documents.itemByID(targetID);
+    selectTopLayer(targetDoc);
+    var targetLayer = getAndSelectLayer(app.documents.itemByID(targetID), 'barcode');
+    var targetLayerLock = layerLocked(app.documents.itemByID(targetID).layers.item('barcode'), false);
+
+    // Duplicate barcodegroup to target document before we can move
+    var dupGroup = BarcodeGroup.duplicate(targetDoc.pages[0]);
+    doc.close(SaveOptions.NO); // We don't need the doc anymore
+
+    var targetPage = targetDoc.pages[0];
+    if( (preset.pageIndex > 0) && (preset.pageIndex < targetDoc.pages.length) ) {
+        targetPage = targetDoc.pages[preset.pageIndex];
+    }
+    originalTargetRulers = idUtil.setRuler(targetDoc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
+
     // Let's position the barcode now
-    //BarcodeGroup.move(page.parent.pages[0]);
-    //BarcodeGroup.visibleBounds = idUtil.calcOffset(BarcodeGroup.visibleBounds, page, preset);
-    
-    //reset rulers
-    idUtil.setRuler(doc, originalRulers);
+    dupGroup.move(targetPage.parent.pages[0]); // Move to first page on spread then move to spread position
+    dupGroup.visibleBounds = idUtil.calcOffset(dupGroup.visibleBounds, targetPage, preset);
+
+    //reset rulers and layer locks
+    idUtil.setRuler(targetDoc, originalTargetRulers);
+    layerLocked(targetDoc.layers.item('barcode'), targetLayerLock);
+
   }
 
   return {

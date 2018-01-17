@@ -41,7 +41,7 @@ var BarcodeDrawer = (function () {
     vShape.addRect( x, y, w, h );
   }
 
-  function drawBox(x, y, boxWidth, boxHeight, colour) {
+  function drawBox(page, x, y, boxWidth, boxHeight, colour) {
     var rect = page.rectangles.add();
     rect.appliedObjectStyle = doc.objectStyles.item(0);
     rect.strokeWeight = 0;
@@ -51,47 +51,53 @@ var BarcodeDrawer = (function () {
     return rect;
   }
 
-  function getCurrentOrNewDocument(preset, size) {
-    var doc = undefined;
-    try {
-      var doc = app.activeDoc;
-    } catch (noDocOpen) {
-      var originalMarginPreference = {
-        top    : app.marginPreferences.top,
-        left   : app.marginPreferences.left,
-        bottom : app.marginPreferences.bottom,
-        right  : app.marginPreferences.right
-      };
+  function getNewDocument(preset, size, hide){
+    var hiding = false === hide; 
+    var originalMarginPreference = {
+      top    : app.marginPreferences.top,
+      left   : app.marginPreferences.left,
+      bottom : app.marginPreferences.bottom,
+      right  : app.marginPreferences.right
+    };
 
-      app.marginPreferences.top    = 0;
-      app.marginPreferences.left   = 0;
-      app.marginPreferences.bottom = 0;
-      app.marginPreferences.right  = 0;
+    app.marginPreferences.top    = 0;
+    app.marginPreferences.left   = 0;
+    app.marginPreferences.bottom = 0;
+    app.marginPreferences.right  = 0;
 
-      doc = app.documents.add();
-      doc.insertLabel('build_by_ean13barcodegenerator', 'true');
+    var d = app.documents.add( !hiding );
+    d.insertLabel('build_by_ean13barcodegenerator', 'true');
+    d.insertLabel('EAN-13', preset.ean);
 
-      doc.viewPreferences.horizontalMeasurementUnits = MeasurementUnits.MILLIMETERS;
-      doc.viewPreferences.verticalMeasurementUnits   = MeasurementUnits.MILLIMETERS;
-      doc.viewPreferences.rulerOrigin                = RulerOrigin.pageOrigin;
+    d.viewPreferences.horizontalMeasurementUnits = MeasurementUnits.MILLIMETERS;
+    d.viewPreferences.verticalMeasurementUnits   = MeasurementUnits.MILLIMETERS;
+    d.viewPreferences.rulerOrigin                = RulerOrigin.pageOrigin;
 
-      doc.documentPreferences.facingPages      = false;
-      doc.documentPreferences.pagesPerDocument = 1;
+    d.documentPreferences.facingPages      = false;
+    d.documentPreferences.pagesPerDocument = 1;
 
-      if (typeof size != "undefined") {
-        doc.documentPreferences.pageWidth   = size.width;
-        doc.documentPreferences.pageHeight  = size.height;
-      }
-
-      //Reset the application default margin preferences to their former state.
-      app.marginPreferences.top    = originalMarginPreference.top   ;
-      app.marginPreferences.left   = originalMarginPreference.left  ;
-      app.marginPreferences.bottom = originalMarginPreference.bottom;
-      app.marginPreferences.right  = originalMarginPreference.right ;
+    if (typeof size != "undefined") {
+      d.documentPreferences.pageWidth   = size.width;
+      d.documentPreferences.pageHeight  = size.height;
     }
-    
-    doc.insertLabel('EAN-13', preset.ean);
-    return doc;
+
+    //Reset the application default margin preferences to their former state.
+    app.marginPreferences.top    = originalMarginPreference.top   ;
+    app.marginPreferences.left   = originalMarginPreference.left  ;
+    app.marginPreferences.bottom = originalMarginPreference.bottom;
+    app.marginPreferences.right  = originalMarginPreference.right ;
+
+    return d;
+  }
+
+  function getCurrentOrNewDocument(preset, size) {
+    var d = app.documents[0];
+    if (!d.isValid) {
+      d = getNewDocument(preset, size);
+    } else {
+      d.insertLabel('EAN-13', preset.ean);
+    }
+    return d;
   }
 
   function drawVbar( w, h, y) {
@@ -148,7 +154,7 @@ var BarcodeDrawer = (function () {
     return [textBox];
   }
 
-  function drawMain(preset, barWidths) {
+  function drawMain(page, preset, barWidths) {
     var pattern = null;
     var widths = null;
     var barWidth = null;
@@ -159,7 +165,7 @@ var BarcodeDrawer = (function () {
       widths   = barWidths[i][1];
       digit    = barWidths[i][2];
 
-      outline( preset, drawChar(preset, hpos, digit, preset.codeFont, fontSize, true) );
+      outline( preset, drawChar(page, preset, hpos, digit, preset.codeFont, fontSize, true) );
 
       for (var j = 0; j < 4; j++) {
         barWidth = widths[j];
@@ -175,7 +181,7 @@ var BarcodeDrawer = (function () {
     return fontSize;
   }
 
-  function drawAddon(preset, addonWidths) {
+  function drawAddon(page, preset, addonWidths) {
     var pattern = null;
     var widths  = null;
     var aWidth  = null;
@@ -190,7 +196,7 @@ var BarcodeDrawer = (function () {
       digit   = addonWidths[i][2]; //may be undefined
 
       if (digit) {
-        var textBox = drawChar(preset, hpos, digit, preset.codeFont, preset.codeFontSize-1, true, -BD.addonHeight-BD.fontHeight-BD.xDimension);
+        var textBox = drawChar(page, preset, hpos, digit, preset.codeFont, preset.codeFontSize-1, true, -BD.addonHeight-BD.fontHeight-BD.xDimension);
         textBox.textFramePreferences.verticalJustification = VerticalJustification.CENTER_ALIGN;
         outline(preset, textBox);
       }
@@ -235,7 +241,7 @@ var BarcodeDrawer = (function () {
     return fontSize;
   }
 
-  function drawText(x, y, boxWidth, boxHeight, text, font, fontSize, textAlign, frameAlign) {
+  function drawText(page, x, y, boxWidth, boxHeight, text, font, fontSize, textAlign, frameAlign) {
     try {
       var textBox = page.textFrames.add();
       textBox.appliedObjectStyle = doc.objectStyles.item(0);
@@ -256,12 +262,12 @@ var BarcodeDrawer = (function () {
     }
   }
 
-  function drawChar(preset, x, character, font, fontSize, fitBox, yOffset) {
+  function drawChar(page, preset, x, character, font, fontSize, fitBox, yOffset) {
     var yOffset = yOffset || 0;
     var y = yOffset + BD.yBottomBar;
     var boxWidth = BD.digitWidth;
     var boxHeight = BD.fontHeight;
-    var textBox = drawText(x, y, boxWidth, boxHeight, character, font, fontSize, Justification.LEFT_ALIGN, VerticalJustification.CENTER_ALIGN);
+    var textBox = drawText(page, x, y, boxWidth, boxHeight, character, font, fontSize, Justification.LEFT_ALIGN, VerticalJustification.CENTER_ALIGN);
       textBox.parentStory.alignToBaseline = false;
     // We don't want lining figures!
     try {
@@ -278,15 +284,15 @@ var BarcodeDrawer = (function () {
     return textBox;
   }
 
-  function savePresets() {
-    var savePresetBox = drawBox(hpos - startX, 0, BD.minBoxWidth, BD.minBoxHeight, 'None');
+  function savePresets(page) {
+    var savePresetBox = drawBox(page, hpos - startX, 0, BD.minBoxWidth, BD.minBoxHeight, 'None');
         savePresetBox.label = presetString;
         savePresetBox.name  = "Barcode_Settings";
     return savePresetBox;
   }
 
-  function drawWhiteBox() {
-    var whiteBox = drawBox(0, 0, BD.minBoxWidth, BD.minBoxHeight, bgSwatchName);
+  function drawWhiteBox(page) {
+    var whiteBox = drawBox(page, 0, 0, BD.minBoxWidth, BD.minBoxHeight, bgSwatchName);
     whiteBox.label = "barcode_whiteBox";
     return whiteBox;
   }
@@ -305,24 +311,17 @@ var BarcodeDrawer = (function () {
     reduce = getBWR_mm( preset.bwr, preset.dpi ); // 10% dotgain == 0.1
     
     presetString = JSON.stringify( preset );
+    var BarcodeSize = {  width : BD.minBoxWidth, height : BD.minBoxHeight };
 
-    doc = getCurrentOrNewDocument(preset, {  width : BD.minBoxWidth, height : BD.minBoxHeight });
+    var targetDoc = getCurrentOrNewDocument(preset, BarcodeSize);
+    var targetID  = targetDoc.id;
 
-    if( (preset.pageIndex < 0) || (preset.pageIndex > doc.pages.length-1) ) {
-      page = doc.pages[0];
-    } else {
-      page = doc.pages[preset.pageIndex];
-    }
-
-    originalRulers = idUtil.setRuler(doc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
+    // Create a temp doc to draw the barcode in
+    doc = getNewDocument(preset, BarcodeSize, false);
+  
+    page = doc.pages[0];
     
-    layer = doc.layers.item('barcode');    
-    if (layer.isValid) {
-      layer.remove();
-    }
-
-    doc.layers.add({name: 'barcode'});
-    layer = doc.layers.item('barcode');
+    var layer = doc.layers.add({name: 'barcode'});
 
     var barStyle = {  
         name          : barcodeFillSwatchName,  
@@ -332,7 +331,10 @@ var BarcodeDrawer = (function () {
         strokeColor   : doc.swatches.itemByName('None'),    
     }
 
-    var barsObjectStyle = doc.objectStyles.add( barStyle );
+    var barsObjectStyle = doc.objectStyles.item(barcodeFillSwatchName);
+    if(! barsObjectStyle.isValid ) {
+      barsObjectStyle = doc.objectStyles.add( barStyle );
+    }
 
     bgSwatchName = 'None';
 
@@ -342,14 +344,14 @@ var BarcodeDrawer = (function () {
 
     var barcodeElements = new Array();
 
-    drawWhiteBox();
+    drawWhiteBox(page);
     
-    savePresets();
+    savePresets(page);
 
     // calculate the initial fontsize 
     // and use this size to draw the other characters
     // this makes sure all numbers are the same size
-    var textBox = drawChar(preset, hpos, preset.ean[0], preset.codeFont, 20, false); //initial '9'
+    var textBox = drawChar(page, preset, hpos, preset.ean[0], preset.codeFont, 20, false); //initial '9'
     fontSize = fitTextBox(textBox, true, true); // Fit type size
 
     outline(preset, textBox);
@@ -358,16 +360,17 @@ var BarcodeDrawer = (function () {
     startX += BD.digitWidth + BD.xDimension;
 
     startGuards();
-    preset.codeFontSize = drawMain(preset, barWidths);
+    preset.codeFontSize = drawMain(page, preset, barWidths);
+
     endGuards();
 
     if(preset.qZoneIndicator) {
-      var textBox = drawChar(preset, hpos, '>', preset.codeFont, preset.codeFontSize, true); //quiet zone indicator '>'
+      var textBox = drawChar(page, preset, hpos, '>', preset.codeFont, preset.codeFontSize, true); //quiet zone indicator '>'
       var elements = outline(preset, textBox);
     }
 
     if(preset.humanReadable && preset.humanReadableStr.length > 0) {
-      var textBox = drawText( BD.startingpos, 0, BD.humanReadableWidth, BD.barsYoffset, 
+      var textBox = drawText(page, BD.startingpos, 0, BD.humanReadableWidth, BD.barsYoffset, 
         preset.humanReadableStr, preset.readFont, 20, Justification.FULLY_JUSTIFIED, VerticalJustification.CENTER_ALIGN);
 
       try {
@@ -383,7 +386,7 @@ var BarcodeDrawer = (function () {
     }
 
     if (addonWidths) {
-      drawAddon(preset, addonWidths);
+      drawAddon(page, preset, addonWidths);
     }
 
     vShape.drawToPage( doc.pages[0], {x: 0, y: 0, scale: 100, style: barcodeFillSwatchName } );
@@ -392,12 +395,30 @@ var BarcodeDrawer = (function () {
 
     BarcodeGroup.label = "Barcode_Complete";
 
+    // Now we have finished drawing we can move and position barcode in targetDoc
+    var targetDoc = app.documents.itemByID(targetID);
+    selectTopLayer(targetDoc);
+    var targetLayer = getAndSelectLayer(app.documents.itemByID(targetID), 'barcode');
+    var targetLayerLock = layerLocked(app.documents.itemByID(targetID).layers.item('barcode'), false);
+
+    // Duplicate barcodegroup to target document before we can move
+    var dupGroup = BarcodeGroup.duplicate(targetDoc.pages[0]);
+    doc.close(SaveOptions.NO); // We don't need the doc anymore
+
+    var targetPage = targetDoc.pages[0];
+    if( (preset.pageIndex > 0) && (preset.pageIndex < targetDoc.pages.length) ) {
+        targetPage = targetDoc.pages[preset.pageIndex];
+    }
+    originalTargetRulers = idUtil.setRuler(targetDoc, {units : "mm", origin : RulerOrigin.SPREAD_ORIGIN });
+
     // Let's position the barcode now
-    //BarcodeGroup.move(page.parent.pages[0]);
-    //BarcodeGroup.visibleBounds = idUtil.calcOffset(BarcodeGroup.visibleBounds, page, preset);
-    
-    //reset rulers
-    idUtil.setRuler(doc, originalRulers);
+    dupGroup.move(targetPage.parent.pages[0]); // Move to first page on spread then move to spread position
+    dupGroup.visibleBounds = idUtil.calcOffset(dupGroup.visibleBounds, targetPage, preset);
+
+    //reset rulers and layer locks
+    idUtil.setRuler(targetDoc, originalTargetRulers);
+    layerLocked(targetDoc.layers.item('barcode'), targetLayerLock);
+
   }
 
   return {

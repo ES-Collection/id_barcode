@@ -1,4 +1,7 @@
-﻿var idUtil = new Object();
+﻿// Bruno Herfst 2018
+// v1.1
+
+var idUtil = new Object();
 
 idUtil.getBoundsInfo = function (bounds){
       // This functions receives bounds (y1, x1, y2, x2)
@@ -25,7 +28,7 @@ idUtil.getBoundsInfo = function (bounds){
 }
 
 idUtil.setRuler = function (doc, myNewUnits){
-        
+
     // This function sets the rulers to the disired measure units
     // and returns the original preset that you can send back to
     // this function to reset the rulers.
@@ -259,8 +262,8 @@ idUtil.calcOffset = function (itemBounds, page, preset){
   var ib = idUtil.getBoundsInfo(itemBounds);
   var pb = idUtil.getBoundsInfo(page.bounds);
 
-  if(preset.alignTo == "barcode_box"){
-    // Now lets add it to the offsets
+  if(preset.alignTo == "Barcode Box"){
+    // Add to offsets
     preset.offset.x += preset.selectionBounds[1];
     preset.offset.y += preset.selectionBounds[0];
     pb = idUtil.getBoundsInfo(preset.selectionBounds);
@@ -431,6 +434,56 @@ idUtil.calcOffset = function (itemBounds, page, preset){
   ib.bounds = addToBounds(ib.bounds, preset.offset.x, preset.offset.y);
   return ib.bounds;
 };
+
+//-----------------------------------------------------------------------------------
+//  LAYER TOOLS
+//-----------------------------------------------------------------------------------
+function getSelectAndMoveLayer(doc, name, afterlayerNo){
+    return moveLayer(getAndSelectLayer(doc, name), afterlayerNo);
+}
+function getAndSelectLayer(doc, name) {
+    return selectLayer(doc, getLayer(doc, name));
+}
+function getLayer(doc, name) {
+    for (i=0; i<doc.layers.length-1; i++) {
+        if (doc.layers[i].name===name) return doc.layers[i];
+    }
+    return doc.layers.add({name:name});
+}
+function selectLayer(doc, layer){
+    doc.activeLayer = layer;
+    return layer;
+}
+function selectTopLayer(doc) {
+  return selectLayer(doc, doc.layers.firstItem());
+}
+function moveLayer(layer, afterlayerNo){
+    try {
+        layer.move(LocationOptions.AFTER,layer.parent.layers[afterlayerNo]);
+        return layer
+    } catch (e) {
+        alert("CoverBuilder.Tools MoveLayer\n" + e.message +  " (Line " + e.line + " in file " + e.fileName + ")");
+    }
+}
+
+function layerLocked(myLayer, givenLock){
+    // givenLock: True:  Layer will be locked
+    // givenLock: False: Layer will be unlocked
+    originalLock = myLayer.locked;
+
+    if(givenLock == undefined){
+        // Toggle!
+        var givenLock = !originalLock;
+    }
+
+    if(givenLock){
+        myLayer.locked = true;
+        return originalLock;
+    } else {
+        myLayer.locked = false;
+        return originalLock;
+    }
+}
 
 // END id_Util.js
 
