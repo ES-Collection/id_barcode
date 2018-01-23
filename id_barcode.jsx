@@ -355,7 +355,7 @@ var polyPlotter = function( options ) {
 // End polyPlotter.js
 /*
 
-    presetManager.js
+    jaxon.jsxinc
 
     An array based preset manager for extendscript    
 

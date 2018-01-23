@@ -4,7 +4,7 @@
   var userChange  = true;
 
   // Start ExtendScript Preset Manager
-  var Pm = new presetManager("EAN13_barcode_Settings.json", standardPresets);
+  var Pm = new presetManager("EAN13_barcode_Settings.json", Barcode_Settings_Schema, standardPresets);
 
   var bwrUnits = ['dots', 'mm', 'µm', 'inch', 'mils'];
 
@@ -30,21 +30,21 @@
   var currentPage    = null;
   var barcodeBox     = null;
 
+  function getBarcodePreset( pageItem ){
+    var tempData = pageItem.label;
+    if(tempData.length > 0){
+      var bData = JSON.parse(tempData);
+      if( typeof bData == 'object' && bData.hasOwnProperty('ean') ) {
+        return Pm.format( bData );
+      }
+    }
+    return false;
+  }
+
   function checkActiveDoc( activeDoc ){
     // Update pages info
     list_of_pages = activeDoc.pages.everyItem().name;
     currentPage   = app.activeWindow.activePage.name;
-
-    function getBarcodePreset( pageItem ){
-      var tempData = pageItem.label;
-      if(tempData.length > 0){
-        var bData = JSON.parse(tempData);
-        if( typeof bData == 'object' && bData.hasOwnProperty('ean') ) {
-          return Pm.format( bData );
-        }
-      }
-      return false;
-    }
 
     function updatePageNumber( MyPreset ) {
       // This function makes sure pagenumer is valid
@@ -637,6 +637,21 @@
 
   // End adjustment panel
 
+  // Add Buttons
+  //-------------
+  var presetDropGroup = presetPanel.add('group');
+
+  var cancelBut = presetPanel.add('button', undefined, 'Cancel', {name: 'cancel'});
+  var okBut     = presetPanel.add('button', undefined, 'Generate', {name: 'OK'});
+  
+  // Set Return/Enter key to OK window
+  okBut.shortcutKey = 'R';
+  okBut.onShortcutKey = okBut.onClick;
+  dialog.defaultElement = okBut; 
+
+  // End buttons
+  //-------------
+
   function humanReadBool( eanString ) {
       // This function checks if EAN-13 barcode needs human readable string
       // Returns True or False
@@ -687,6 +702,16 @@
 
   function renderData( p ) {
     userChange = false;
+    
+    var startingLockChar = Pm.Widget.getLockChars()[0];
+    var re = new RegExp(escapeRegExp(startingLockChar) + " [0-9-]{8,}", "g");
+
+    if( String(p.name).match(re) ) {
+      // Update buton text to "Update"
+      okBut.text = "Update";
+    } else {
+      okBut.text = "Generate";
+    }
 
     try {
       // Set input
@@ -722,22 +747,9 @@
     userChange = true;
   }
 
-  // Add Buttons
-  //-------------
   // Attach widget
-  Pm.Widget.attachTo( presetPanel, 'name', { getData:getData, renderData:renderData }, { onloadIndex:onloadIndex } );
+  Pm.Widget.attachTo( presetDropGroup, 'name', { getData:getData, renderData:renderData }, { onloadIndex:onloadIndex } );
 
-  // Add OK/Cancel
-  var cancelBut = presetPanel.add('button', undefined, 'Cancel', {name: 'cancel'});
-  var okBut     = presetPanel.add('button', undefined, 'Generate', {name: 'OK'});
-
-  // Set Return/Enter key to OK window
-  okBut.shortcutKey = 'R';
-  okBut.onShortcutKey = okBut.onClick;
-  dialog.defaultElement = okBut; 
-
-  // End buttons
-  //-------------
   if (dialog.show() === 1) {
     // Save anf get user settings
     var preset  = Pm.Widget.saveLastUsed();
@@ -800,12 +812,30 @@
         return showDialog(-1); // Restart
     }
 
-    if( preset.alignTo === "Selection" ) {
-      preset.selectionBounds = selectionDetails.bounds;
-    } else if( preset.alignTo === "Barcode Box" ) {
-      preset.selectionBounds = barcodeBoxDetails.bounds;
+    if(okBut.text === "Generate") {
+      if( preset.alignTo === "Selection" ) {
+        preset.selectionBounds = selectionDetails.bounds;
+      } else if( preset.alignTo === "Barcode Box" ) {
+        preset.selectionBounds = barcodeBoxDetails.bounds;
+      } else {
+        preset.selectionBounds = [0,0,0,0];
+      }
     } else {
-      preset.selectionBounds = [0,0,0,0];
+      // remove barcode
+      // Get existing barcodes in document and add check their settings
+      var existingBarcodes = idUtil.getItemsByName(activeDoc, "Barcode_Settings");
+      if(existingBarcodes.length > 0) {
+        for (i = 0; i < existingBarcodes.length; i++) { 
+          var eBarcodePreset = getBarcodePreset(existingBarcodes[i]);
+          if( preset.name === ("[ "+ eBarcodePreset.ean +" ]") ) {
+              var barcodeGroup = existingBarcodes[i].parent;
+              // Make sure we have the right parent, sorry mum!
+              if(barcodeGroup.label == "Barcode_Complete") {
+                barcodeGroup.remove();
+              }
+          }
+        }
+      }
     }
 
     return preset;

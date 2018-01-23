@@ -1,0 +1,2347 @@
+/*
+
+    jaxon.js
+
+    A array based preset manager for extendscript    
+
+    Bruno Herfst 2017
+
+    Version 2.3
+
+    MIT license (MIT)
+    
+    https://github.com/GitBruno/Jaxon
+
+*/
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Start ExtendScript Poly fills v1.1
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// ARRAY
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+if (!Array.isArray) {
+  Array.isArray = function(arg) {
+    return Object.prototype.toString.call(arg) === '[object Array]';
+  };
+}
+
+// Production steps of ECMA-262, Edition 5, 15.4.4.18
+// Reference: http://es5.github.io/#x15.4.4.18
+if (!Array.prototype.forEach) {
+  Array.prototype.forEach = function(callback/*, thisArg*/) {
+    var T, k;
+
+    if (this == null) {
+      throw new TypeError('this is null or not defined');
+    }
+
+    var O   = Object(this);
+    var len = O.length >>> 0;
+    if (typeof callback !== 'function') {
+      throw new TypeError(callback + ' is not a function');
+    }
+
+    if (arguments.length > 1) {
+      T = arguments[1];
+    }
+
+    k = 0;
+
+    while (k < len) {
+      var kValue;
+      if (k in O) {
+        kValue = O[k];
+        callback.call(T, kValue, k, O);
+      }
+      k++;
+    }
+  };
+}
+
+if (!Array.prototype.indexOf) {
+  Array.prototype.indexOf = function (vMember, nStartFrom) {
+
+    if (this == null) {
+      throw new TypeError("Array.prototype.indexOf() - can't convert `" + this + "` to object");
+    }
+
+    var
+      nIdx = isFinite(nStartFrom) ? Math.floor(nStartFrom) : 0,
+      oThis = this instanceof Object ? this : new Object(this),
+      nLen = isFinite(oThis.length) ? Math.floor(oThis.length) : 0;
+
+    if (nIdx >= nLen) {
+      return -1;
+    }
+
+    if (nIdx < 0) {
+      nIdx = Math.max(nLen + nIdx, 0);
+    } 
+
+    if (vMember === undefined) {
+      do {
+        if (nIdx in oThis && oThis[nIdx] === undefined) {
+          return nIdx;
+        }
+      } while (++nIdx < nLen);
+    } else {
+      do {
+        if (oThis[nIdx] === vMember) {
+          return nIdx;
+        }
+      } while (++nIdx < nLen);
+    }
+    return -1;
+  };
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// OBJECT
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+/**
+* Polyfill for Object.keys
+* @see: https://developer.mozilla.org/en-US/docs/JavaScript/Reference/Global_Objects/Object/keys
+*/
+if (!Object.keys) {
+  Object.keys = (function () {
+    var hasOwnProperty = Object.prototype.hasOwnProperty,
+        hasDontEnumBug = !({toString: null}).propertyIsEnumerable('toString'),
+        dontEnums = [
+          'toString',
+          'toLocaleString',
+          'valueOf',
+          'hasOwnProperty',
+          'isPrototypeOf',
+          'propertyIsEnumerable',
+          'constructor'
+        ],
+        dontEnumsLength = dontEnums.length;
+
+    return function (obj) {
+      if (typeof obj !== 'object' && typeof obj !== 'function' || obj === null) throw new TypeError('Object.keys called on non-object');
+
+      var result = [];
+
+      for (var prop in obj) {
+        if (hasOwnProperty.call(obj, prop)) result.push(prop);
+      }
+
+      if (hasDontEnumBug) {
+        for (var i=0; i < dontEnumsLength; i++) {
+          if (hasOwnProperty.call(obj, dontEnums[i])) result.push(dontEnums[i]);
+        }
+      }
+      return result;
+    }
+  })()
+};
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// JSON
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+//  json2.js -> json-es.js
+//  2016-10-28
+//  Public Domain.
+//  NO WARRANTY EXPRESSED OR IMPLIED. USE AT YOUR OWN RISK.
+//  See http://www.JSON.org/js.html
+
+//  This is a reference implementation. You are free to copy, modify, or
+//  redistribute.
+
+//   Adjusted by Bruno Herfst 2017
+//   1. Make it run in ExtendScript
+//   2. Add JSON.clone() function
+//   3. Add JSON.saveFile() function
+//   4. Add JSON.openFile() function
+//   5. Add JSON.ask2Safe() function
+
+// Create a JSON object only if one does not already exist. We create the
+// methods in a closure to avoid creating global variables.
+
+if (typeof JSON !== "object") {
+    JSON = {};
+}
+
+(function () {
+    "use strict";
+
+    var rx_one = /^[\],:{}\s]*$/;
+    var rx_two = /\\(?:["\\\/bfnrt]|u[0-9a-fA-F]{4})/g;
+    var rx_three = /"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g;
+    var rx_four = /(?:^|:|,)(?:\s*\[)+/g;
+    var rx_escapable = /[\\"\u0000-\u001f\u007f-\u009f\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g;
+    var rx_dangerous = /[\u0000\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g;
+
+    function f(n) {
+        // Format integers to have at least two digits.
+        return n < 10
+            ? "0" + n
+            : n;
+    }
+
+    function this_value() {
+        return this.valueOf();
+    }
+
+    if (typeof Date.prototype.toJSON !== "function") {
+
+        Date.prototype.toJSON = function () {
+
+            return isFinite(this.valueOf())
+                ? this.getUTCFullYear() + "-" +
+                        f(this.getUTCMonth() + 1) + "-" +
+                        f(this.getUTCDate()) + "T" +
+                        f(this.getUTCHours()) + ":" +
+                        f(this.getUTCMinutes()) + ":" +
+                        f(this.getUTCSeconds()) + "Z"
+                : null;
+        };
+
+        Boolean.prototype.toJSON = this_value;
+        Number.prototype.toJSON = this_value;
+        String.prototype.toJSON = this_value;
+    }
+
+    var gap;
+    var indent;
+    var meta;
+    var rep;
+
+
+    function quote(string) {
+
+// If the string contains no control characters, no quote characters, and no
+// backslash characters, then we can safely slap some quotes around it.
+// Otherwise we must also replace the offending characters with safe escape
+// sequences.
+
+        rx_escapable.lastIndex = 0;
+        return rx_escapable.test(string)
+            ? "\"" + string.replace(rx_escapable, function (a) {
+                var c = meta[a];
+                return typeof c === "string"
+                    ? c
+                    : "\\u" + ("0000" + a.charCodeAt(0).toString(16)).slice(-4);
+            }) + "\""
+            : "\"" + string + "\"";
+    }
+
+
+    function str(key, holder) {
+
+// Produce a string from holder[key].
+
+        var i;          // The loop counter.
+        var k;          // The member key.
+        var v;          // The member value.
+        var length;
+        var mind = gap;
+        var partial;
+        var value = holder[key];
+
+// If the value has a toJSON method, call it to obtain a replacement value.
+
+        if (value && typeof value === "object" &&
+                typeof value.toJSON === "function") {
+            value = value.toJSON(key);
+        }
+
+// If we were called with a replacer function, then call the replacer to
+// obtain a replacement value.
+
+        if (typeof rep === "function") {
+            value = rep.call(holder, key, value);
+        }
+
+// What happens next depends on the value's type.
+
+        switch (typeof value) {
+        case "string":
+            return quote(value);
+
+        case "number":
+
+// JSON numbers must be finite. Encode non-finite numbers as null.
+
+            return isFinite(value)
+                ? String(value)
+                : "null";
+
+        case "boolean":
+        case "null":
+
+// If the value is a boolean or null, convert it to a string. Note:
+// typeof null does not produce "null". The case is included here in
+// the remote chance that this gets fixed someday.
+
+            return String(value);
+
+// If the type is "object", we might be dealing with an object or an array or
+// null.
+
+        case "object":
+
+// Due to a specification blunder in ECMAScript, typeof null is "object",
+// so watch out for that case.
+
+            if (!value) {
+                return "null";
+            }
+
+// Make an array to hold the partial results of stringifying this object value.
+
+            gap += indent;
+            partial = [];
+
+// Is the value an array?
+
+            if (Object.prototype.toString.apply(value) === "[object Array]") {
+
+// The value is an array. Stringify every element. Use null as a placeholder
+// for non-JSON values.
+
+                length = value.length;
+                for (i = 0; i < length; i += 1) {
+                    partial[i] = str(i, value) || "null";
+                }
+
+// Join all of the elements together, separated with commas, and wrap them in
+// brackets.
+
+                v = partial.length === 0
+                    ? "[]"
+                    : gap
+                        ? "[\n" + gap + partial.join(",\n" + gap) + "\n" + mind + "]"
+                        : "[" + partial.join(",") + "]";
+                gap = mind;
+                return v;
+            }
+
+// If the replacer is an array, use it to select the members to be stringified.
+
+            if (rep && typeof rep === "object") {
+                length = rep.length;
+                for (i = 0; i < length; i += 1) {
+                    if (typeof rep[i] === "string") {
+                        k = rep[i];
+                        v = str(k, value);
+                        if (v) {
+                            partial.push(quote(k) + (
+                                gap
+                                    ? ": "
+                                    : ":"
+                            ) + v);
+                        }
+                    }
+                }
+            } else {
+
+// Otherwise, iterate through all of the keys in the object.
+
+                for (k in value) {
+                    if (Object.prototype.hasOwnProperty.call(value, k)) {
+                        v = str(k, value);
+                        if (v) {
+                            partial.push(quote(k) + (
+                                gap
+                                    ? ": "
+                                    : ":"
+                            ) + v);
+                        }
+                    }
+                }
+            }
+
+// Join all of the member texts together, separated with commas,
+// and wrap them in braces.
+
+            v = partial.length === 0
+                ? "{}"
+                : gap
+                    ? "{\n" + gap + partial.join(",\n" + gap) + "\n" + mind + "}"
+                    : "{" + partial.join(",") + "}";
+            gap = mind;
+            return v;
+        }
+    }
+
+// If the JSON object does not yet have a stringify method, give it one.
+
+    if (typeof JSON.stringify !== "function") {
+        meta = {    // table of character substitutions
+            "\b": "\\b",
+            "\t": "\\t",
+            "\n": "\\n",
+            "\f": "\\f",
+            "\r": "\\r",
+            "\"": "\\\"",
+            "\\": "\\\\"
+        };
+        JSON.stringify = function (value, replacer, space) {
+
+// The stringify method takes a value and an optional replacer, and an optional
+// space parameter, and returns a JSON text. The replacer can be a function
+// that can replace values, or an array of strings that will select the keys.
+// A default replacer method can be provided. Use of the space parameter can
+// produce text that is more easily readable.
+
+            var i;
+            gap = "";
+            indent = "";
+
+// If the space parameter is a number, make an indent string containing that
+// many spaces.
+
+            if (typeof space === "number") {
+                for (i = 0; i < space; i += 1) {
+                    indent += " ";
+                }
+
+// If the space parameter is a string, it will be used as the indent string.
+
+            } else if (typeof space === "string") {
+                indent = space;
+            }
+
+// If there is a replacer, it must be a function or an array.
+// Otherwise, throw an error.
+
+            rep = replacer;
+            if (replacer && typeof replacer !== "function" &&
+                    (typeof replacer !== "object" ||
+                    typeof replacer.length !== "number")) {
+                throw new Error("JSON.stringify");
+            }
+
+// Make a fake root object containing our value under the key of "".
+// Return the result of stringifying the value.
+
+            return str("", {"": value});
+        };
+    }
+
+
+// If the JSON object does not yet have a parse method, give it one.
+
+    if (typeof JSON.parse !== "function") {
+        JSON.parse = function (text, reviver) {
+
+// The parse method takes a text and an optional reviver function, and returns
+// a JavaScript value if the text is a valid JSON text.
+
+            var j;
+
+            function walk(holder, key) {
+
+// The walk method is used to recursively walk the resulting structure so
+// that modifications can be made.
+
+                var k;
+                var v;
+                var value = holder[key];
+                if (value && typeof value === "object") {
+                    for (k in value) {
+                        if (Object.prototype.hasOwnProperty.call(value, k)) {
+                            v = walk(value, k);
+                            if (v !== undefined) {
+                                value[k] = v;
+                            } else {
+                                delete value[k];
+                            }
+                        }
+                    }
+                }
+                return reviver.call(holder, key, value);
+            }
+
+
+// Parsing happens in four stages. In the first stage, we replace certain
+// Unicode characters with escape sequences. JavaScript handles many characters
+// incorrectly, either silently deleting them, or treating them as line endings.
+
+            text = String(text);
+            rx_dangerous.lastIndex = 0;
+            if (rx_dangerous.test(text)) {
+                text = text.replace(rx_dangerous, function (a) {
+                    return "\\u" +
+                            ("0000" + a.charCodeAt(0).toString(16)).slice(-4);
+                });
+            }
+
+// In the second stage, we run the text against regular expressions that look
+// for non-JSON patterns. We are especially concerned with "()" and "new"
+// because they can cause invocation, and "=" because it can cause mutation.
+// But just to be safe, we want to reject all unexpected forms.
+
+// We split the second stage into 4 regexp operations in order to work around
+// crippling inefficiencies in IE's and Safari's regexp engines. First we
+// replace the JSON backslash pairs with "@" (a non-JSON character). Second, we
+// replace all simple value tokens with "]" characters. Third, we delete all
+// open brackets that follow a colon or comma or that begin the text. Finally,
+// we look to see that the remaining characters are only whitespace or "]" or
+// "," or ":" or "{" or "}". If that is so, then the text is safe for eval.
+
+            if (
+                rx_one.test(
+                    text
+                        .replace(rx_two, "@")
+                        .replace(rx_three, "]")
+                        .replace(rx_four, "")
+                )
+            ) {
+
+// In the third stage we use the eval function to compile the text into a
+// JavaScript structure. The "{" operator is subject to a syntactic ambiguity
+// in JavaScript: it can begin a block or an object literal. We wrap the text
+// in parens to eliminate the ambiguity.
+
+                j = eval("(" + text + ")");
+
+// In the optional fourth stage, we recursively walk the new structure, passing
+// each name/value pair to a reviver function for possible transformation.
+
+                return (typeof reviver === "function")
+                    ? walk({"": j}, "")
+                    : j;
+            }
+
+// If the text is not JSON parseable, then a SyntaxError is thrown.
+
+            throw new SyntaxError("JSON.parse");
+        };
+    };
+
+    if (typeof JSON.clone !== "function") {
+
+// The clone method takes a JSON object and returns a clone of the JSON object.
+
+        JSON.clone = function ( value ) {
+            if (typeof value === undefined) {
+                return undefined;
+            }
+            return JSON.parse(JSON.stringify(value));
+        }
+    };
+
+    if (typeof JSON.saveFile !== "function") {
+
+// The saveFile method takes an ExtendScript File object and any instance and saves it the the given File.
+
+        JSON.saveFile = function (File, Obj){
+            var objStr = JSON.stringify(Obj);
+            File.open('w');
+            var ok = File.write(objStr);
+            if (ok) {
+                ok = File.close();
+            }
+            if (!ok) {
+                alert("JSON: Error saving file. \n" + File.error);
+                File.close();
+            }
+            return Obj;
+        }
+    };
+
+    if (typeof JSON.openFile !== "function") {
+
+// The saveFile method takes an ExtendScript File object and any instance and saves it the the given File.
+
+        JSON.openFile = function (File){
+            var obj = {};
+            if(File !== false){
+                File.open('r');
+                content = File.read();
+                obj = JSON.parse(content);
+                File.close();
+            }else{
+                alert("JSON: Could not open file."); // if something went wrong
+            }
+            return obj;
+        }
+    };
+
+    if (typeof JSON.ask2Safe !== "function") {
+
+// The ask2Safe method is similar to saveFile method. Except that it will ask the user first
+
+        JSON.ask2Safe = function (question, File, Obj){
+            var save = confirm(question);
+            if(save){
+                JSON.saveFile(File, Obj);
+            }
+            return save;
+        }
+    };
+
+}());
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// End ExtendScript Poly fills
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+/*
+
+  JSON Schema Instantiator
+  
+  https://github.com/tomarad/JSON-Schema-Instantiator
+  
+  The MIT License (MIT)
+
+  Copyright (c) 2015 Tom Arad
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy of this software 
+  and associated documentation files (the "Software"), to deal in the Software without restriction,
+  including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, 
+  and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, 
+  subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all copies 
+  or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
+  INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
+  PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
+  FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
+  ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+*/
+
+var Instantiator = function() {
+    //////////////
+    // privates //
+    //////////////
+    
+    'use strict';
+    
+    // The JSON Object that defines the default values of certain types.
+    var typesInstantiator = {
+      'string': '',
+      'number': 0,
+      'integer': 0,
+      'null': null,
+      'boolean': false, // Always stay positive?
+      'object': { }
+    };
+
+    /**
+     * Checks whether a variable is a primitive.
+     * @param obj - an object.
+     * @returns {boolean}
+     */
+    function isPrimitive(obj) {
+      var type = obj.type;
+
+      return typesInstantiator[type] !== undefined;
+    }
+
+    /**
+     * Checks whether a property is on required array.
+     * @param property - the property to check.
+     * @param requiredArray - the required array
+     * @returns {boolean}
+     */
+    function isPropertyRequired(property, requiredArray) {
+      var found = false;
+      requiredArray = requiredArray || [];
+      requiredArray.forEach(function(requiredProperty) {
+          if (requiredProperty === property) {
+            found = true;
+          }
+      });
+      return found;
+    }
+
+
+    function shouldVisit(property, obj, options) {
+        return (!options.requiredPropertiesOnly) || (options.requiredPropertiesOnly && isPropertyRequired(property, obj.required));
+    }
+
+    /**
+     * Instantiate a primitive.
+     * @param val - The object that represents the primitive.
+     * @returns {*}
+     */
+    function instantiatePrimitive(val) {
+      var type = val.type;
+
+      // Support for default values in the JSON Schema.
+      if (val.default) {
+        return val.default;
+      }
+
+      return typesInstantiator[type];
+    }
+
+    /**
+     * Checks whether a variable is an enum.
+     * @param obj - an object.
+     * @returns {boolean}
+     */
+    function isEnum(obj) {
+      return Object.prototype.toString.call(obj.enum) === '[object Array]';
+    }
+
+    /**
+     * Checks whether a variable is an array.
+     * @param obj - an object.
+     * @returns {boolean}
+     */
+    function isArray(obj) {
+      return Array.isArray(obj);
+    }
+
+    /**
+     * Extracts the type of the object.
+     * If the type is an array, set type to first in list of types.
+     * If obj.type is not overridden, it will fail the isPrimitive check.
+     * Which internally also checks obj.type.
+     * @param obj - An object.
+    */
+    function getObjectType(obj) {
+      // Check if type is array of types.
+      if (isArray(obj.type)) {
+        obj.type = obj.type[0];
+      }
+
+      return obj.type;
+    }
+
+    /**
+     * Instantiate an enum.
+     * @param val - The object that represents the primitive.
+     * @returns {*}
+     */
+    function instantiateEnum(val) {
+      // Support for default values in the JSON Schema.
+      if (val.default) {
+          return val.default;
+      }
+      if (!val.enum.length) {
+          return undefined;
+      }
+      return val.enum[0];
+    }
+
+    /**
+     * The main function.
+     * Calls sub-objects recursively, depth first, using the sub-function 'visit'.
+     * @param schema - The schema to instantiate.
+     * @returns {*}
+     */
+    function instantiate(schema, options) {
+      options = options || {};
+
+      // Set requiredPropertiesOnly to true if not defined
+      if ( typeof options.requiredPropertiesOnly === 'undefined') options.requiredPropertiesOnly = true;
+  
+      /**
+       * Visits each sub-object using recursion.
+       * If it reaches a primitive, instantiate it.
+       * @param obj - The object that represents the schema.
+       * @param name - The name of the current object.
+       * @param data - The instance data that represents the current object.
+       */
+      function visit(obj, name, data) {
+        if (!obj) {
+          return;
+        }
+
+        var i;
+        var type = getObjectType(obj);
+
+        // We want non-primitives objects (primitive === object w/o properties).
+        if (type === 'object' && obj.properties) {
+          data[name] = data[name] || { };
+
+          // Visit each property.
+          for (var property in obj.properties) {
+            if (obj.properties.hasOwnProperty(property)) {
+              if (shouldVisit(property, obj, options)) {
+                visit(obj.properties[property], property, data[name]);
+              }
+            }
+          }
+        } else if (obj.allOf) {
+          for (i = 0; i < obj.allOf.length; i++) {
+            visit(obj.allOf[i], name, data);
+          }
+        } else if (type === 'array') {
+          data[name] = [];
+          var len = 0;
+          if (obj.minItems || obj.minItems > 0) {
+            len = obj.minItems;
+          }
+
+          // Instantiate 'len' items.
+          for (i = 0; i < len; i++) {
+            visit(obj.items, i, data[name]);
+          }
+        } else if (isEnum(obj)) {
+          data[name] = instantiateEnum(obj);
+        } else if (isPrimitive(obj)) {
+          data[name] = instantiatePrimitive(obj);
+        }
+      }
+
+      var data = {};
+      visit(schema, 'kek', data);
+      return data['kek'];
+    }
+
+    ////////////
+    // expose //
+    ////////////
+    return {
+        instantiate : instantiate
+    };
+}();
+/*
+ * Jassi v0.1.2
+ * https://github.com/iclanzan/jassi
+ *
+ * Copyright (c) 2014 Sorin Iclanzan <sorin@iclanzan.com>
+ * License: https://github.com/iclanzan/jassi
+ */
+
+
+var Validator = function() {
+    //////////////
+    // privates //
+    //////////////
+    
+    
+    'use strict';
+
+    var isArray = Array.isArray;
+    var keys = Object.keys;
+
+    /**
+     * Check if a given value is an instance of a JSON object.
+     * This means that arrays and the null object are not considered objects.
+     *
+     * @param  {any}     value Any value to be checked
+     * @return {Boolean}       Returns true if the value is an instance of a JSON object, false otherwise.
+     */
+    function isObject(value) {
+      return null !== value && typeof value == 'object' && !isArray(value);
+    }
+
+    /**
+     * Get the type of a value.
+     *
+     * JSON primitive types:
+     * Array, Boolean, Number, null, Object, String
+     *
+     * @param  {any}    value Any value
+     * @return {String}       One of the JSON primitive types.
+     */
+    function getType(value) {
+      if( isObject(value) ) return 'object';
+      if( isArray (value) ) return 'array';
+      if( null === value  ) return 'null';
+      return typeof value;     
+    }
+
+    /**
+     * Check if two items are equal as per the JSON Schema spec.
+     *
+     * @param  {any}     item1 The first item
+     * @param  {any}     item2 The second item
+     * @return {Boolean}       Returns true if the items are equal.
+     */
+    function areEqual(item1, item2) {
+      var type1 = getType(item1);
+      var type2 = getType(item2);
+      var i, l, keys1, keys2, key;
+
+      if (type1 != type2) return false;
+
+      if ('array' == type1) {
+        if (item1.length !== item2.length) return false;
+
+        for (i = 0, l = item1.length; i < l; i ++)
+          if (!areEqual(item1[i], item2[i])) return false;
+
+        return true;
+      }
+
+      if ('object' == type1) {
+        keys1 = keys(item1);
+        keys2 = keys(item2);
+
+        if (keys1.length !== keys2.length) return false;
+
+        for (i = 0, l = keys1.length; i < l; i ++) {
+          key = keys1[i];
+          if (!item2.hasOwnProperty(key) || !areEqual(item1[key], item2[key])) return false;
+        }
+
+        return true;
+      }
+
+      return item1 === item2;
+    }
+
+    function or(item1, item2) {
+      return undefined !== item1 ? item1 : item2;
+    }
+
+    /**
+     * Validate a JSON instance against a schema.
+     *
+     * The function returns an empty array if validation is successful.
+     *
+     * @param  {any}    instance An instance of a JSON data that needs to be validated
+     * @param  {Object} schema   The schema to validate the instance against
+     * @param  {String} path     Optional. The path to the property that is being validated.
+     * @return {Array}           An array of objects describing validation errors.
+     */
+    var validate = function(instance, schema, path) {
+      var errors = [], type, l, i, j, items, itemsIsArray, additional, additionalIsObject, found, properties, pattern, pp;
+
+      function addError(message) {
+        errors.push({property:path, message: message});
+        return errors;
+      }
+
+      if (undefined === path) path = '';
+
+      if (!isObject(schema)) return addError('Invalid schema.');
+
+      type = getType(instance);
+      if (schema.type) {
+        items = isArray(schema.type) ? schema.type : [schema.type];
+        if (!~items.indexOf(type) && (type != 'number' || !~items.indexOf('integer') || instance % 1 != 0)) {
+          addError('Invalid type. Was expecting ' + schema.type + ' but found ' + type + '.');
+        }
+      }
+
+      if ('array' == type) {
+        l = instance.length;
+
+        if (schema.items || schema.additionalItems) {
+          items = schema.items || {};
+          itemsIsArray = isArray(schema.items);
+
+          additional = schema.additionalItems;
+          additionalIsObject = isObject(schema.additionalItems);
+
+          if (itemsIsArray && false === additional && l > (j = items.length))
+            addError('The instance can only have up to ' + j + ' items.');
+
+          else for (i = 0; i < l; i ++)
+            errors = errors.concat(validate(
+              instance[i],
+              itemsIsArray ? items[i] || additionalIsObject && additional || {} : items,
+              path + '[' + i + ']'
+            ));
+        }
+
+        if (schema.maxItems && l > schema.maxItems)
+          addError('There must be a maximum of ' + schema.maxItems + ' item(s) in the array.');
+
+        if (schema.minItems && l < schema.minItems)
+          addError('There must be a minimum of ' + schema.minItems + ' item(s) in the array.');
+
+        if (schema.uniqueItems) {
+          dance: for (i = 0; i < l; i ++) {
+            for (j = i + 1; j < l; j ++) {
+              if (areEqual(instance[i], instance[j])) {
+                addError("The items in the array must be unique.");
+                break dance;
+              }
+            }
+          }
+        }
+      }
+
+      if ('object' == type) {
+        if (schema.maxProperties && keys(instance).length > schema.maxProperties)
+          addError('The instance must have at most ' + schema.maxProperties + ' members.');
+
+        if (schema.minProperties && keys(instance).length < schema.minProperties)
+          addError('The instance must have at least ' + schema.minProperties + ' members.');
+
+        if (schema.required)
+          schema.required.forEach(function(requiredProperty) {
+            if (!instance.hasOwnProperty(requiredProperty))
+              addError('Required property "' + requiredProperty + '" is missing.');
+          });
+
+        if (schema.properties || schema.additionalProperties || schema.patternProperties) {
+          properties = or(schema.properties, {});
+          pattern = or(schema.patternProperties, {});
+          additional = or(schema.additionalProperties, {});
+          pp = keys(pattern);
+        }
+
+        keys(instance).forEach(function(key) {
+          var schemas, dependency;
+
+          if (schema.dependencies && (dependency = schema.dependencies[key])) {
+            if (isArray(dependency)) {
+              dependency.forEach(function (prop) {
+                if (!instance.hasOwnProperty(prop)) {
+                  addError('Property "' + key + '" requires "' + prop + '" to also be present.');
+                }
+              });
+            }
+            else {
+              errors = errors.concat(validate(instance, dependency, path));
+            }
+          }
+
+          if (
+            properties &&
+            false === additional &&
+            !properties.hasOwnProperty(key) &&
+            !(pp && pp.some(function(regex) { return key.match(regex); }))
+          )
+            addError('The key "' + key + '" is not allowed to be set.');
+
+          else {
+            schemas = [];
+            if (properties && properties.hasOwnProperty(key))
+              schemas.push(properties[key]);
+        
+            pp && pp.forEach(function(regex) {
+              if (key.match(regex) && pattern[regex]) {
+                schemas.push(pattern[regex]);
+              }
+            });
+
+            if (!schemas.length && additional)
+              schemas.push(additional);
+
+            schemas.forEach(function(schema) {
+              errors = errors.concat(validate(instance[key], schema, path ? path + '.' + key : key));
+            });
+          }
+        });
+      }
+
+      if ('string' == type) {
+        if (schema.maxLength && instance.length > schema.maxLength)
+          addError('The instance must not be more than ' + schema.maxLength + ' character(s) long.');
+
+        if (schema.minLength && instance.length < schema.minLength)
+          addError('The instance must be at least ' + schema.minLength + ' character(s) long.');
+
+        if (schema.pattern && !instance.match(schema.pattern))
+          addError('Regex pattern /' + schema.pattern + '/ is a mismatch.');
+      }
+
+      if ('number' == type) {
+        if (schema.multipleOf !== undefined && instance / schema.multipleOf % 1 != 0)
+          addError('The instance is required to be a multiple of ' + schema.multipleOf + '.');
+
+        if (schema.maximum !== undefined) {
+          if (!schema.exclusiveMaximum && schema.maximum < instance)
+            addError('The instance must have a maximum value of ' + schema.maximum + '.');
+
+          if (schema.exclusiveMaximum && schema.maximum <= instance)
+            addError('The instance must be lower than ' + schema.maximum + '.');
+        }
+
+        if (schema.minimum !== undefined) {
+          if (!schema.exclusiveMinimum && schema.minimum > instance)
+            addError('The instance must have a minimum value of ' + schema.minimum + '.');
+
+          if (schema.exclusiveMinimum && schema.minimum >= instance)
+            addError('The instance must be greater than ' + schema.minimum + '.');
+        }
+      }
+
+      if (schema['enum']) {
+        items = schema['enum'];
+        l = items.length;
+        for (i = 0, found = 0; i < l && !found; i++)
+          if (areEqual(items[i], instance))
+            found = 1;
+
+        if (!found) addError('The instance must have one of the following values: ' + items.join(', ') + '.');
+      }
+
+      if (schema.allOf) {
+        schema.allOf.forEach(function(schema) {
+          errors = errors.concat(validate(instance, schema, path));
+        });
+      }
+
+      if (schema.anyOf) {
+        items = schema.anyOf;
+        l = items.length;
+        for(i = 0, found = 0; i < l && !found; i++)
+          if (!validate(instance, items[i], path).length)
+            found = 1;
+
+        if (!found) addError('The instance must validate against at least one schema defined by the "anyOf" keyword.');
+      }
+
+      if (schema.oneOf) {
+        items = schema.oneOf;
+        l = items.length;
+        for (i = 0, found = 0; i < l; i++)
+          if (!validate(instance, items[i], path).length) {
+            if (found) {
+              addError('The instance must validate against exactly one schema defined by the "oneOf" keyword.');
+              break;
+            }
+            found = 1;
+          }
+
+        if (!found) {
+          addError('The instance must validate against one schema defined by the "oneOf" keyword.');      
+        }
+      }
+
+      if (schema.not && !validate(instance, schema.not, path).length)
+        addError('The instance must not validate against the schema defined by the "not" keyword.');
+
+      return errors;
+    };
+
+    ////////////
+    // expose //
+    ////////////
+    return {
+        validate : validate
+    };
+}();
+/*
+
+Copyright (c) 2012 Dmitry Poklonskiy <dimik@ya.ru>
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the 'Software'),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense, 
+and/or sell copies of the Software, and to permit persons to whom the 
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included 
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS 
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER 
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS 
+IN THE SOFTWARE.
+
+*/
+
+/* Adjusted by Bruno Herfst 2017 to run in ExtendScript */
+
+/**
+ * Create the ObjectManager instance.
+ * @class Provide methods for reaching into objects and insert the missing parts
+ * using dot notation mongodb-style query string.
+ * @name ObjectManager
+ * @param {Object|Array} [ctx] Object which we want to resolve.
+ * @param {String} [delim="."] Delimiter for the query string.
+ */
+var ObjectManager = function (ctx, delim) {
+    "string" === typeof ctx && (delim = ctx, ctx = {}); // Shift params.
+
+    this.ctx = ctx || {};
+    this.delim = delim || ".";
+
+    /**
+     * Resolve query through context object.
+     * @private
+     * @function
+     * @name manage
+     * @param {Object|Array} obj Object which we want to resolve, it will always be this.ctx value.
+     * @param {String[]} path Keys/indexes from query.
+     * @param {Number} depth How deep do we go.
+     * @param {Function} callback Will be called on resolving complete(fail).
+     * @param {Boolean} upsert If requested object(s)/array(s) do not exist, insert one.
+     * @returns {Object|Array} Link on the last but one object in query path.
+     */
+    this.manage = function (obj, path, depth, callback, upsert) {
+        var err = null, i, key;
+
+        for (i = 0; i < depth; i++) {
+            key = path[i];
+
+            if(null != obj) {
+                "undefined" === typeof obj[key] && upsert && (obj[key] = isNaN(path[i + 1]) && {} || []); // If next key is an integer - create an array, else create an object.
+                if("undefined" === typeof (obj = obj[key])) {
+                    break;
+                }
+            } else {
+                err = new TypeError("Cannot read property '%s' of ".replace('%s', key) + (null === obj && 'null' || typeof obj));
+                break;
+            }
+        }
+        if(callback) {
+            //async(function () {
+                callback(err && String(err), !err && obj);
+            //});
+        } else {
+            return err || obj;
+        }
+    };
+
+    /**
+     * Getter method of the ObjectManager.
+     * @function
+     * @name ObjectManager.find
+     * @param {String} [query] Query string. If is not specified or an empty string - return resolved object.
+     * @param {Function} [callback] Will be called with 2 params when resolving complete(fail):
+     * 1. null or error description string
+     * 2. value of the certain object[key] or undefined/false
+     * @returns {ObjectManager|Object} If callback is specified return 'this' for chaining calls,
+     * else return resolved value (context object if path is empty string or not specified).
+     */
+    this.find = function (query, callback) {
+        "function" === typeof query && (callback = query, query = false); // Shift params if path not specified.
+
+        var path = query && query.split(this.delim) || [],
+            result = this.manage(this.ctx, path, path.length, callback);
+
+        if(result instanceof Error) {
+            throw result;
+        }
+
+        return callback && this || result;
+    };
+
+    /**
+     * Setter method of the ObjectManager.
+     * @function
+     * @name ObjectManager.update
+     * @param {String} query Query string.
+     * @param value What we want to assign.
+     * @param {Function} [callback] Will be called with 2 params when assigning complete(fail):
+     * 1. null or error description string
+     * 2. updated object or false
+     * @param {Boolean} [upsert=true] If requested object(s)/array(s) do not exist, insert one.
+     * @returns {ObjectManager} For chaining calls.
+     */
+    this.update = function (query, value, callback, upsert) {
+        "boolean" === typeof callback && (upsert = callback, callback = null); // Shift params if callback not specified.
+
+        var path = query && query.split(this.delim) || [],
+            depth = path.length - 1,
+            lastKey = path[depth],
+            upsert = "boolean" === typeof upsert ? upsert : true,
+            ctx = this.ctx,
+            result = callback || this.manage(ctx, path, depth, callback, upsert),
+            set = function (obj, key, val) {
+                return null != obj && key ? obj[key] = val :
+                    new TypeError("Cannot set property '%s' of ".replace('%s', key) + (null === obj && 'null' || typeof obj));
+            };
+
+        if(callback) {
+            this.manage(ctx, path, depth, function (err, obj) {
+                err || (result = set(obj, lastKey, value)) instanceof Error && (err = String(result));
+                callback(err, !err && ctx);
+            }, upsert);
+        } else {
+            if(result instanceof Error || (result = set(result, lastKey, value)) instanceof Error) {
+                throw result;
+            }
+        }
+
+        return this;
+    };
+
+    /**
+     * Apply function with object as context.
+     * @function
+     * @name ObjectManager.apply
+     * @param {String} query Query string.
+     * @param {Function} fn Will be called with this = object, resolved through the query.
+     * @param {Array} args Arguments for function call.
+     */
+    this.apply = function (query, fn, args) {
+        return fn.apply(this.find(query), args);
+    };
+
+    /**
+     * Create a copy of the resolved object.
+     * @function
+     * @name ObjectManager.copy
+     * @param {String} query Query string.
+     * @returns {Object|Boolean} Resolved copy or false.
+     */
+    this.copy = function (query) {
+        var result = this.find(query);
+
+        return "object" === typeof result && JSON.parse(JSON.stringify(result));
+    };
+
+    /**
+     * Create a mixin
+     * @function
+     * @name ObjectManager.mixin
+     * @param {String} query Query string.
+     * @returns {Object} Mixin of the resolved
+     */
+    this.mixin = function () {
+        var query = arguments[0],
+            ctx = this.find(query),
+            result = {},
+            hasOwn = Object.prototype.hasOwnProperty,
+            extend = function (o1, o2) {
+                for (var prop in o2) {
+                    hasOwn.call(o2, prop) && (o1[prop] = o2[prop]);
+                }
+
+                return o1;
+            };
+
+        for (var arg = 1; arg < arguments.length; arg++) {
+            result = extend(result, arguments[arg]);
+        }
+
+        return extend(result, ctx);
+    };
+
+    // Self-invoking constructor
+    if(!(this instanceof ObjectManager)) {
+        return new ObjectManager(delim);
+    }
+};
+
+
+
+var jaw = function( Schema, instance ) {
+    // ref to self
+    var Jaw = this;
+    var manager = new ObjectManager({});
+    var _Schema = {};
+
+    var _isValid = {
+        schema  : true ,
+        managed : true ,
+        all : function(){
+            return (this.schema && this.managed);
+        }
+    };
+
+    var errors = [];
+
+    function setSchema( Schema ){
+        // Validate given schema
+        _Schema = JSON.clone( Schema );
+        // Shema is object, let's make sure it has a type property as well
+        errors = Validator.validate( Jaw.getSchema(), {"type": "object","required": ["type"]} );
+        if( errors.length > 0 ) {
+            _isValid.schema = false;
+            errors.unshift("Schema not valid (Missing type property).");
+            return;
+        }
+
+        // Validating against a fresh instance from schema should always work
+        // If not, there is something wrong with the schema
+        errors = Validator.validate( Jaw.getTemplate( true ), Jaw.getSchema() );
+        if( errors.length > 0 ) {
+            errors.unshift("Schema not valid (Could not generate valid instance from shema).");
+            _isValid.schema = false;
+        }
+    };
+
+    function userException(message) {
+        this.message = message;
+        this.name = 'Error';
+    };
+
+    function setObj( newObj ) {
+        if(_isValid.schema) {
+            errors = Validator.validate( newObj, Jaw.getSchema() );
+            if( errors.length === 0 ) {
+                manager = new ObjectManager(newObj);
+                _isValid.managed = true;
+            }
+        }
+        return Jaw;
+    };
+
+    function copyKeys(fromObj, toObj) {
+        if( (typeof fromObj !== 'object') ||
+            (typeof toObj   !== 'object') ) {
+            throw new userException('copyKeys needs to be given objects');
+        }
+        Object.keys(fromObj).forEach(function(key) {
+            toObj[key] = fromObj[key];
+        });
+    };
+
+    function validateManager(){
+      var result = Validator.validate( manager.find(), Jaw.getSchema() );  
+      if( result.length > 0 ) {
+        errors.push(result);
+        _isValid.managed = false;
+      }
+    };
+
+    //-----------------
+    // Public funcions
+    //-----------------
+    Jaw.isValid = function() {
+        return _isValid.all();
+    };
+
+    Jaw.errors = function() {
+        if(Array.isArray(errors)) {
+            return errors;
+        } else {
+            return [errors];
+        }
+    };
+
+    Jaw.wrap = function( givenObj ) {
+        var newObj = Instantiator.instantiate( Jaw.getSchema() );
+        if(typeof newObj === 'object') {
+            // Copy all keys from given object to new object
+            copyKeys(givenObj, newObj);
+        }
+        setObj( newObj );
+        return Jaw;
+    };
+
+    Jaw.getTemplate = function( allProperties ) {
+        // allProperties = undefined = false = {requiredPropertiesOnly: true}
+        if(typeof allProperties !== 'boolean') {
+            var requiredPropertiesOnly = true; // allProperties == false
+        } else {
+            var requiredPropertiesOnly = !allProperties;
+        }
+        return Instantiator.instantiate( Jaw.getSchema(), {requiredPropertiesOnly: requiredPropertiesOnly} );
+    };
+
+    Jaw.getSchema = function() {
+        return JSON.clone(_Schema);
+    };
+
+    Jaw.get = function( path ) {
+        return manager.find( path );
+    };
+    
+    Jaw.set = function( path, to ) {
+        var check = new ObjectManager( JSON.clone( Jaw.get() ) );
+
+        var result = check.update( path, to, function (resultErr) {
+          errors.push(resultErr);
+        });
+        
+        var err = Validator.validate( check.find(), Jaw.getSchema() );
+
+        var errHandler = function(err, obj) {
+            //err: null or string with error description "TypeError: cannot set property 'undefined' of number"
+            //obj: updated object { a : { b : [{ c : 10 }] } }
+            if( typeof err === "string") {
+                errors.push(resultErr);
+            }
+        }
+
+        if ( err.length > 0 ) {
+          errors.push( err );
+        } else {
+          manager.update( path, to, errHandler);
+          validateManager();
+        }
+        return Jaw;
+    };
+
+    //-----------------
+    // Initialise
+    //-----------------
+    setSchema( Schema );
+    if( errors.length === 0 ) {
+        // Start managing something
+        manager = new ObjectManager( Jaw.getTemplate( false ) );
+    };
+
+    if(Jaw.isValid() && instance) {
+        if(typeof instance !== 'object') {
+            _valid.managed = false;
+            errors.unshift("Initialisation Error: Can't get Jaw arround non-object");
+        } else {
+            Jaw.wrap(instance);
+        }
+    };
+};
+/* -------------------------------------------------------------------------------
+    
+    @param fileName : String
+        Name of file to be saved in user data folder
+    
+    @param Schema : Object
+        A schema to validate against. Also used to generate defaults
+
+    @param standardPresets : Array
+        Initial presets that are loaded if no presetsFile is found at filePath
+
+------------------------------------------------------------------------------- */
+
+var presetManager = function( fileName, Schema, standardPresets ) {
+    // ref to self
+    var Jaxon    = this;
+
+    // standard file path
+    var filePath = Folder.userData + "/" + String(fileName);
+    var valid  = true;
+    var errors = [];
+
+    function userException(message) {
+        this.message = message;
+        this.name = 'Error';
+    }
+
+    // S C H E M A S
+    //-------------------------
+    // Load Jaw for preset and validate preset Schema
+    var presetJaw = new jaw( Schema );
+    if(!presetJaw.isValid()) {
+        throw presetJaw.errors()[0];
+    }
+    // Create Schema for standardPresets
+    // This preset manager works on the premise
+    // that presets are objects collected in an array
+    var PresetsSchema = { "type": "array", "items": Schema };
+    var presetsJaws = new jaw( PresetsSchema );
+    if(!presetsJaws.isValid()) {
+        throw userException(presetsJaws.errors());
+    }
+
+    // Validate standardPresets
+    //-------------------------
+    if ( typeof standardPresets === 'undefined') standardPresets = [Jaws.getTemplate(true)];
+    if ( Array.isArray( standardPresets ) ) {
+        standardPresets = JSON.clone( standardPresets );
+    } else {
+        throw new userException("Param standardPresets needs to be type of array but is " + String(typeof standardPresets));
+    }
+    if(!presetsJaws.wrap(standardPresets).isValid()) {
+        throw userException(presetsJaws.errors());
+    }
+
+    //-------------------------------------------------
+    // P R I V A T E   F U N C T I O N S
+    //-------------------------------------------------
+
+    function createMsg ( bool, comment ) {
+        // Standard return obj
+        return {success: Boolean(bool), comment: String( comment ) };
+    }
+
+    function not_in_array ( arr, element ) {
+        for(var i=0; i<arr.length; i++) {
+            if (arr[i] == element) return false;
+        }
+        return true;
+    }
+
+    function fileExist ( filePath ) {
+        var f = File(filePath);
+        if(f.exists){
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    function writeFile ( filePath, contentString ) {
+        // This function will (over) write a file to file path
+        // filePath does not need to exist
+
+        var alertUser = true;
+
+        function error( bool, message ) {
+            if(alertUser) {
+                alert( "Preset Manager\n" + String(message) );
+            }
+            try {
+                f.close();
+            } catch ( err ) {
+                // Do nothing
+            }
+            return createMsg ( bool, message );
+        }
+
+        var f = File(filePath);
+        
+        try {
+            // Set character encoding
+            f.encoding = "UTF-16";
+            
+            // Open the file
+            if( ! f.open('w') ){
+                return error( false, "Error opening file at " + filePath +": "+ f.error );
+            }
+            // Write to file
+            if( ! f.write( String(contentString) ) ){
+                return error( false, "Error writing to file at " + filePath +": "+ f.error );
+            }
+            // Close the file
+            if( ! f.close() ){
+                return error( false, "Error closing file at " + filePath +": "+ f.error );
+            }
+        } catch ( r ) {
+            return error( false, r.error );
+        }
+
+        return createMsg ( true, "Done" );
+    }
+
+    function updateObj ( Old_Obj, New_Obj, ignoreKeys ) {
+        // This function will try and copy all values
+        // from Old_Obj to New_Obj
+        for ( var key in New_Obj ) {
+            if( Old_Obj.hasOwnProperty(key) ) {
+                if ( not_in_array( ignoreKeys, key ) ) {
+                    New_Obj[key] = Old_Obj[key];
+                }
+            }
+        }
+        return JSON.clone( New_Obj );
+    }
+
+    function updatePreset ( oldPreset, ignoreKeys ) {
+        var ignoreKeys = ignoreKeys || [];
+        if(! ignoreKeys instanceof Array) {
+            throw "The function updatePreset expects ignoreKeys to be instance of Array."
+        }
+        if( oldPreset === undefined ) {
+            return presetJaw.getTemplate( true );
+        }
+        if(! oldPreset instanceof Object) {
+            throw "The function updatePreset expects Preset to be instance of Object."
+        }
+        // Create a copy of the standard preset
+        var newPreset = presetJaw.getTemplate( true );
+        return updateObj( oldPreset, newPreset, ignoreKeys );
+    }
+
+
+    // P R E S E T   C O N T R O L L E R
+    //-------------------------------------------------
+
+    function presetController( Preset ) {
+        // This preset controller handles a single preset
+        // And will be attached to any preset
+        var PresetController = this;
+        // Create a fresh template
+        var _Preset = new jaw( Schema );
+
+        var temporaryState = false;
+
+        var _hasProp = function( propName ) {
+            var Preset = _Preset.get();
+            if( Preset.hasOwnProperty( propName ) ){
+                return true;
+            } else {
+                alert("UiPreset does not have property " + propName);
+                return false;
+            }
+        }
+
+        // Public
+        //-------
+        PresetController.setTemporaryState = function( bool ) {
+            temporaryState = bool == true;
+            return temporaryState;
+        }
+
+        PresetController.getTemporaryState = function( bool ) {
+            return temporaryState;
+        }
+
+        PresetController.getTemplate = function( allProperties ) {
+            // allProperties = undefined = false
+            return presetJaw.getTemplate( allProperties );
+        }
+
+        PresetController.get = function() {
+            return _Preset.get();
+        }
+
+        PresetController.load = function( Preset ) {
+            _Preset.wrap( updatePreset( Preset ) );
+            if(_Preset.errors().length > 0) {
+                alert("Could not load preset.\n" + JSON.stringify(_Preset.errors()) );
+            }
+
+            return _Preset.get();
+        }
+        
+        // Get and set preset properties
+        PresetController.getProp = function( propName ) {
+            return _Preset.get( propName );
+        }
+
+        PresetController.setProp = function( propName, val ) {
+            var prop = String(propName);
+            if( _hasProp( prop ) ) {
+                _Preset.set(prop, val);
+                return JSON.clone( _Preset.get(prop) );
+            }
+            alert("Could not set preset property.\nProperty " + prop + " does not exist.");
+            return undefined;
+        }
+
+        // init
+        PresetController.load( Preset );
+
+    } // End of presetController
+
+
+    // P R E S E T S   C O N T R O L L E R
+    //-------------------------------------------------
+
+    function presetsController( presets ) {
+        // The presets controller handles the presets array
+
+        var PresetsController = this;
+
+        function infuse( presets ) {
+            var holder = new Array();
+            var len = presets.length;
+            for (var i = 0; i < len; i++) {
+                holder[i] = new presetController( presets[i] );
+            }
+            return holder;
+        }
+
+        var _Presets = infuse( presets );
+
+        function clean() {
+            var holder = new Array();
+            var len = _Presets.length;
+            for (var i = 0; i < len; i++) {
+                holder[i] = _Presets[i].get();
+            }
+            return holder;
+        }
+
+        function cleanSave_presets(){
+            // This function removes any temporary preset before saving to disk
+            var holder = new Array();
+            var len = _Presets.length;
+            for (var i = 0; i < len; i++) {
+                if(! _Presets[i].getTemporaryState() ) {
+                    holder.push( _Presets[i].get() );
+                }
+            }
+            return holder;
+        }
+
+        function presetExist( key, val ) {
+            var len = _Presets.length;
+            for (var i = len-1; i >= 0; i--) {
+                if (_Presets[i].getProp(key) == val) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function calcIndex( pos, len ) {
+            // Calculate actual index
+            var i = pos;
+            if ( pos < 0 ) {
+                i = len - Math.abs(pos);
+            }
+            return Math.abs(i);
+        }
+
+        function outOfRange( pos, len ) {
+            var pos = parseInt(pos);
+            var len = parseInt(len);
+            if( len == 0 ) {
+                // Everything is out of range :)
+                return true;
+            }
+            if(pos > len) {
+                return true;
+            }
+            if( pos < -1-len ) {
+                return true;
+            }
+            return false;
+        }
+
+        //------------------------------------------
+        // Public access
+
+        PresetsController.get = function () {
+            return clean();
+        }
+        
+        PresetsController.getTemplate = function() {
+            return presetJaw.getTemplate( true );
+        }
+
+        PresetsController.getByKey = function ( key, val ) {
+            // Sample usage: Jaxon.Presets.getByKey('id',3);
+            // Please note that this function returns the first
+            // preset it can find
+            var len = _Presets.length;
+            for (var i = len-1; i >= 0; i--) {
+                if (_Presets[i].getProp(key) === val) {
+                   return _Presets[i].get();
+                }
+            }
+            return false;
+        }
+
+        PresetsController.getIndex = function ( key, val ) {
+            // Sample usage: Jaxon.Presets.getIndex('name','this');
+            // returns array with matches
+            var matches = new Array();
+            var len = _Presets.length;
+            for (var i = len-1; i >= 0; i--) {
+                if (_Presets[i].getProp(key) == val) {
+                   matches.unshift(i);
+                }
+            }
+            return matches;
+        }
+
+        PresetsController.getByIndex = function ( position ) {
+            // Sample usage: Jaxon.getPresetByIndex( 3 );
+            var len = _Presets.length;
+            if( outOfRange( position, len ) ) {
+                alert("Preset Manager\nThere is no preset at index " + position);
+                return false;
+            }
+            var i = calcIndex( parseInt(position), len );
+            return _Presets[i].get();
+        }
+
+        PresetsController.getPropList = function ( key ) {
+            if( !Jaxon.UiPreset.get().hasOwnProperty( key ) ) {
+                alert("Preset Manager\nCan't create propertylist with key " + key);
+                return [];
+            }
+            var len = _Presets.length;
+            var propList = new Array();
+            for (var i = 0; i < len; i++) {
+                propList[i] = _Presets[i].getProp(key);
+            }
+            return propList;
+        }
+
+        PresetsController.reset = function () {
+            _Presets = infuse( standardPresets );
+        }
+
+        PresetsController.load = function ( presets ) {
+            _Presets = infuse( presets );
+            return clean();
+        }
+
+        PresetsController.add = function ( preset, options ) {
+            // options { position: integer, temporary preset: boolean }
+            // para position; index that can handle negative numbers
+            // that are calculated from the back -1 == last
+
+            var len = _Presets.length;
+            var pos = len;
+
+            if(options && options.hasOwnProperty('position')) {
+                pos = options.position;
+                if ( isNaN(pos) ) {
+                    pos = len;
+                }
+                if( outOfRange(pos, len) ) {
+                    pos = len;
+                }
+            }
+
+            var i = calcIndex( pos, len+1 );
+            var infusedPreset = new presetController( preset );
+
+            if(options && options.hasOwnProperty('temporary')) {
+                infusedPreset.setTemporaryState( options.temporary == true );
+            }
+
+            _Presets.splice(i, 0, infusedPreset);
+
+            return clean();
+        }
+
+        PresetsController.addUnique = function ( Preset, key, options ) {
+            // Sample usage: PresetManager.Presets.addUnique( Preset, 'name' );
+            var silently = false;
+            var position = -1;
+
+            if(options && options.hasOwnProperty('position')) {
+                if( !isNaN(options.position) ) position = parseInt(options.position);
+            }
+            if(options && options.hasOwnProperty('silently')) {
+                silently = options.silently == true;
+            }
+            var exist = presetExist(key, Preset[key]);
+            
+            if(exist){
+                if(silently) {
+                    var overwrite = true;
+                } else {
+                    var overwrite = confirm("Do you want to overwrite the existing preset?");
+                }
+                if (overwrite) {
+                    PresetsController.removeWhere( key, Preset[key] );
+                } else {
+                    return false;
+                }
+            }
+
+            var newLen = _Presets.length+1;
+            PresetsController.add( Preset, {position: position} );
+            return _Presets.length == newLen;
+        }
+        
+        PresetsController.remove = function ( position ) {
+            var len = _Presets.length;
+            // Check for outside range
+            if( outOfRange(position, len) ) {
+                alert("Could not remove preset\nOut of range: presets length: " + len + " index to be removed: "  + position);
+                return false;
+            }
+            var i = calcIndex( parseInt(position), len );
+            _Presets.splice( i, 1 );
+            return true;
+        }
+        
+        PresetsController.overwriteIndex = function ( position, Preset ) {
+            PresetsController.remove( position );
+            PresetsController.add( Preset, {position: position} );
+            return clean();
+        }
+
+        PresetsController.removeWhere = function ( key, val ) {
+            // Sample usage: Jaxon.Presets.removeWhere('id',3);
+            // This function removes any preset that contains key - val match
+            // It returns true if any presets have been removed
+            var success = false;
+            var len = _Presets.length;
+            for (var i = len-1; i >= 0; i--) {
+                if (_Presets[i].getProp(key) === val) {
+                    _Presets.splice( i, 1 );
+                    success = true;
+                }
+            }
+            return success;
+        }
+
+        PresetsController.saveToDisk  = function ( ) {
+            var presetStr = JSON.stringify( cleanSave_presets() );
+            return writeFile(filePath, presetStr);
+        }
+
+        PresetsController.loadFromDisk  = function () {
+            if( !fileExist(filePath) ){
+                alert("Cannot load presets.\nNo preset file found at " + filePath);
+                return false;
+            }
+
+            var PresetsFile = File(filePath);
+            PresetsFile.open('r');
+            var content = PresetsFile.read();
+            PresetsFile.close();
+
+            try {
+                var NewPresets = JSON.parse(content);
+                _Presets = infuse( NewPresets );
+                return true;
+            } catch(e) {
+                alert("Error reading JSON\n" + e.description);
+                return false;
+            }
+        }
+        
+        PresetsController.removeFromDisk = function () {
+            if( fileExist(filePath) ){
+                var PresetsFile = File(filePath);
+                PresetsFile.remove();
+                return true;
+            }
+            return false;
+        }
+
+    } // End of presetsController
+
+    // W I D G E T 
+    //-------------------------------------------------
+
+    function widgetCreator( SUI_Group ) {
+
+        var WidgetCreator = this;
+        var DataPort      = { getData: undefined, renderUiPreset: undefined };
+
+        WidgetCreator.get = function () {
+            if(DataPort) {
+                return DataPort.getData();
+            } else {
+                return createMsg ( false, "No dataport defined" );
+            }
+        }
+
+        // Any preset that starts with a locking character can't be deleted by the user
+        var lockChars = ['[',']'];
+        WidgetCreator.getLockChars = function () {
+            return lockChars;
+        }
+
+        var ButtonText = {save: "Save Preset", clear: "Clear Preset"};
+        WidgetCreator.getButtonText = function () {
+            return ButtonText;
+        }
+
+        var newName = "New Preset";
+        WidgetCreator.getNewPresetName = function () {
+            return newName;
+        }
+
+        var lastUsedName = "Last Used";
+        WidgetCreator.getLastUsedPresetName = function () {
+            return lastUsedName;
+        }
+
+        // Keep track of which preset this preset is based on
+        // This makes it easy to over-ride an existing preset
+        var basedOnPresetName = newName;
+
+        var newPresetName      = "";
+        var lastUsedPresetName = "";
+
+        function updatePresetNames() {
+            newPresetName      = String(lockChars[0] + " " + newName      + " " + lockChars[1]);
+            lastUsedPresetName = String(lockChars[0] + " " + lastUsedName + " " + lockChars[1]);
+        }
+
+        // This makes it possible to update UI everytime UiPreset is changed
+        // Even when the widget is not loaded
+        var presetsDrop    = { selection: 0 };
+        var presetBut      = { text: "" };
+        var presetDropList = [];
+        var updateUI       = true;
+        var listKey        = "";
+
+        function getDropDownIndex( index, len ) {
+            var i = parseInt( index );
+            if (i == 0) {
+                return i;
+            }
+            if (i < 0) {
+                i += len;
+            }
+            if (i > len ) {
+                i = len;
+            }
+            return i;
+        }
+
+        function createDropDownList(){
+            // Check listKey and load dropDown content
+            presetDropList = Jaxon.Presets.getPropList( listKey );
+            // Add new (clear) preset to dropdown list
+            presetDropList.unshift( newPresetName );
+        }
+
+        WidgetCreator.activateNew = function () {
+            // This function resets the dropdown to first (New Preset)
+            updateUI = false;
+            presetsDrop.selection = 0;
+            presetBut.text = ButtonText.save;
+            updateUI = true;
+            return createMsg ( true, "Done" );
+        }
+
+        WidgetCreator.activateLastUsed = function () {
+            // This function resets the dropdown to last (Last Used)
+            presetsDrop.selection = Jaxon.Presets.getIndex( listKey, lastUsedPresetName )[0]+1;
+            presetBut.text = ButtonText.save;
+            return createMsg ( true, "Done" );
+        }
+
+        WidgetCreator.saveUiPreset = function () {
+            Jaxon.UiPreset.load( DataPort.getData() );
+            return createMsg ( true, "Done" );
+        }
+
+        WidgetCreator.savePreset = function ( options ) {
+            WidgetCreator.saveUiPreset();
+            
+            // Process Options
+            if(options && options.hasOwnProperty('updateProps')) {
+                for ( var i = 0; i < options.updateProps.length; i++ ) {
+                    Jaxon.UiPreset.setProp( options.updateProps[i].key, options.updateProps[i].value );
+                }
+            }
+        
+            var position = -1;
+            if( options && options.hasOwnProperty('position') ) {
+                position = parseInt(options.position);
+            }
+
+            Jaxon.UiPreset.save( position );
+            Jaxon.Presets.saveToDisk();
+            
+            return createMsg ( true, "Done" );
+        }
+
+        WidgetCreator.overwritePreset = function( key, val, options ) {
+            // Save SUI data
+            WidgetCreator.saveUiPreset();
+
+            Jaxon.UiPreset.setProp( key, val );
+
+            // Process Options
+            var index = -1;
+            if(options && options.hasOwnProperty('position')) {
+                index = parseInt(options.position);
+            } else {
+                index = Jaxon.Presets.getIndex( key, val );
+            }
+
+            Jaxon.Presets.addUnique( Jaxon.UiPreset.get(), key, {position: index, silently: true} );
+            Jaxon.Presets.saveToDisk();
+            return createMsg ( true, "Done" );
+        }
+
+        WidgetCreator.saveLastUsed = function() {
+            try {
+                var originalName = Jaxon.UiPreset.get()[listKey];
+                WidgetCreator.overwritePreset( listKey, lastUsedPresetName, {position: -1} );
+                Jaxon.UiPreset.setProp( listKey, originalName );
+            } catch ( err ) {
+                alert(err)
+            }
+            return Jaxon.UiPreset.get();
+        }
+
+        WidgetCreator.reset = function() {
+            return createMsg( false, "Widget is not loaded.");
+        }
+
+        WidgetCreator.loadIndex = function( i ) {
+            // Load data in UiPreset
+            Jaxon.UiPreset.loadIndex( i );
+            // Update SUI
+            DataPort.renderUiPreset();
+            presetsDrop.selection = getDropDownIndex( i+1, presetDropList.length );
+            return true;
+        }
+
+        WidgetCreator.attachTo = function ( SUI_Group, listKeyID, Port, Options ) {
+            var onloadIndex = null;
+            listKey = String(listKeyID);
+
+            if(! (Port && Port.hasOwnProperty('renderData') && Port.hasOwnProperty('getData')) ) {
+                return createMsg( false, "Could not establish data port.");
+            }
+            DataPort.renderUiPreset = function () {
+                basedOnPresetName = String( Jaxon.UiPreset.getProp(listKey) );
+                Port.renderData( Jaxon.UiPreset.get() );
+            }
+            DataPort.getData = Port.getData;
+
+            // Process Options
+            if(Options && Options.hasOwnProperty('onloadIndex')) {
+                onloadIndex = parseInt(Options.onloadIndex);
+            }
+            if(Options && Options.hasOwnProperty('lockChars')) {
+                if(lockChars.length == 2) {
+                    lockChars[0] = String(Options.lockChars[0]);
+                    lockChars[1] = String(Options.lockChars[1]);
+                }
+            }
+            if(Options && Options.hasOwnProperty('newPresetName')) {
+                newName = String(Options.newPresetName);
+            }
+            if(Options && Options.hasOwnProperty('lastUsedPresetName')) {
+                lastUsedName = String(Options.lastUsedPresetName);
+            }
+            if(Options && Options.hasOwnProperty('buttonTextSave')) {
+                ButtonText.save  = String(Options.buttonTextSave);
+            }
+            if(Options && Options.hasOwnProperty('buttonTextClear')) {
+                ButtonText.clear = String(Options.buttonTextClear);
+            }
+
+            function updatePresetData() {
+                // Update newPresetName
+                updatePresetNames();
+                createDropDownList( listKey );
+            }
+
+            updatePresetData();
+
+            // Attach new widget to SUI_Group
+            presetsDrop = SUI_Group.add('dropdownlist', undefined, presetDropList);
+            presetsDrop.alignment = 'fill';
+            presetsDrop.selection = getDropDownIndex( onloadIndex, presetDropList.length );
+
+            presetsDrop.onChange = function () { 
+                if(updateUI) {
+                    // Load data in UiPreset
+                    if(this.selection.index == 0) {
+                        Jaxon.UiPreset.reset();
+                    } else {
+                        Jaxon.UiPreset.loadIndex( this.selection.index-1 );
+                    }
+                    DataPort.renderUiPreset();
+                    // Update button
+                    if( this.selection.text.indexOf(lockChars[0]) == 0 ){
+                        presetBut.text = ButtonText.save;
+                    } else {
+                        presetBut.text = ButtonText.clear;
+                    }
+                }
+            }
+
+            WidgetCreator.updatePresetsDrop = function( selectIndex ) {
+                // This function will update the drop down without updating UI input values
+                updateUI = false;
+                updatePresetData();
+                presetsDrop.removeAll();
+                var len = presetDropList.length; 
+                for (var i=0; i<len; i++) {
+                    presetsDrop.add('item', presetDropList[i] );
+                }
+                presetsDrop.selection = isNaN(selectIndex) ? 0 : calcIndex( selectIndex, len );
+                updateUI = true;
+                return createMsg( true, "Done");
+            }
+
+            WidgetCreator.reset = function() {
+                // Update Presets Dropdown
+                WidgetCreator.updatePresetsDrop();
+                // Clear UI and update button states
+                presetsDrop.selection = 0;
+                return createMsg( true, "Done");
+            }
+
+            presetBut = SUI_Group.add('button', undefined, ButtonText.save);
+
+            function _addUiPresetToPresets( defaultName ) {
+                var defaultName = defaultName || basedOnPresetName;
+                    defaultName = String( defaultName );
+
+                var presetName = prompt("Name: ", defaultName, "Save Preset");
+
+                if ( presetName != null ) {
+                    if ( presetName.indexOf(lockChars[0]) == 0 ) {
+                        alert( "You can't start a preset name with: " + lockChars[0] );
+                        // Recurse
+                        return _addUiPresetToPresets();
+                    }
+                    Jaxon.UiPreset.setProp( listKey, presetName );
+                    // Add preset to end
+                    Jaxon.Presets.addUnique( Jaxon.UiPreset.get(), listKey, {position:-1} );
+                    WidgetCreator.reset();
+                    presetsDrop.selection = presetsDrop.items.length-1;
+                }
+            }
+
+            presetBut.onClick = function () { 
+                if( this.text == ButtonText.clear ) {
+                    Jaxon.Presets.remove( presetsDrop.selection.index - 1 );
+                    WidgetCreator.reset();
+                } else { // Save preset
+                    Jaxon.UiPreset.load( DataPort.getData() );
+                    _addUiPresetToPresets();
+                }
+                Jaxon.Presets.saveToDisk();
+            }
+            
+            // Load selected dropdown
+            if( isNaN(onloadIndex) ) {
+                WidgetCreator.loadIndex( onloadIndex );
+            } else {
+                // AKA load session state
+                DataPort.renderUiPreset();
+            }
+            return createMsg( true, "Done");
+        }
+
+    } // End Widget
+
+
+    //-------------------------------------------------
+    // S T A R T  P U B L I C   A P I
+    //-------------------------------------------------
+
+    Jaxon.getPresetsFilePath = function () {
+        return filePath;
+    }
+
+    Jaxon.errors = function() {
+        // Always return an array of errors
+        if(Array.isArray(errors)) {
+            return errors;
+        } else {
+            return [errors];
+        }
+    }
+
+    // current preset (The presets we manipulate)
+    // We need to buils these
+    Jaxon.Presets  = new presetsController( standardPresets );
+    
+    // create a data controller for UiPreset
+    Jaxon.UiPreset = new presetController( presetJaw.getTemplate( true ) );
+    
+    // create widget builder
+    Jaxon.Widget = new widgetCreator();
+
+    // Extend presetController UiPreset
+    Jaxon.UiPreset.save = function( position ) {
+        // position or index, negative numbers are calculated from the back -1 == last
+        return Jaxon.Presets.add( Jaxon.UiPreset.get(), {position: position} );
+    }
+
+    Jaxon.UiPreset.loadIndex = function ( index ) {
+        var len = Jaxon.Presets.get().length;
+        var i = Math.abs(parseInt(index));
+        if(i > len-1) {
+            alert("Preset Manager\nLoad index is not a valid preset index: " + index);
+            return createMsg ( false, "Not a valid preset index." );
+        }
+        Jaxon.UiPreset.load( Jaxon.Presets.getByIndex( i ) );
+        return createMsg ( true, "Done" );
+    }
+
+    Jaxon.UiPreset.reset = function ( ) {
+        Jaxon.UiPreset.load( presetJaw.getTemplate( true ) );
+    }
+
+    Jaxon.reset = function( hard ) {
+        var hard = (hard == true);
+        if( hard ) {
+            Jaxon.Presets.reset();
+            Jaxon.Presets.saveToDisk();
+        } else {
+            Jaxon.Presets.loadFromDisk();
+        }
+        Jaxon.UiPreset.reset();
+        Jaxon.Widget.reset();
+    }
+
+    Jaxon.format = function ( preset ) {
+        return updatePreset ( preset );
+    }
+
+    //-------------------------------------------------
+    // E N D   P U B L I C   A P I
+    //-------------------------------------------------
+    
+    // I N I T
+    //---------    
+    // Save the standard presets if not allready exist
+    if(!fileExist( filePath ) ){
+        if( ! Jaxon.Presets.saveToDisk() ){
+            throw("Failed to start Jaxon\nUnable to save presets to " + filePath);
+        }
+    }
+    // Load the presets
+    Jaxon.Presets.loadFromDisk();
+};
+

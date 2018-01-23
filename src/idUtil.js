@@ -1,5 +1,5 @@
 ﻿// Bruno Herfst 2018
-// v1.1
+// v1.2
 
 var idUtil = new Object();
 
@@ -483,6 +483,11 @@ function layerLocked(myLayer, givenLock){
         myLayer.locked = false;
         return originalLock;
     }
+}
+
+function escapeRegExp(str) {
+  // Source: https://stackoverflow.com/questions/3446170/escape-string-for-use-in-javascript-regex
+  return str.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, "\\$&");
 }
 
 // END id_Util.js
