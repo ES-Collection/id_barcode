@@ -57,13 +57,17 @@ var BarcodeDrawer = (function () {
       top    : app.marginPreferences.top,
       left   : app.marginPreferences.left,
       bottom : app.marginPreferences.bottom,
-      right  : app.marginPreferences.right
+      right  : app.marginPreferences.right,
+      columnCount  : app.marginPreferences.columnCount,
+      columnGutter : app.marginPreferences.columnGutter
     };
 
     app.marginPreferences.top    = 0;
     app.marginPreferences.left   = 0;
     app.marginPreferences.bottom = 0;
     app.marginPreferences.right  = 0;
+    app.marginPreferences.columnCount  = 1;
+    app.marginPreferences.columnGutter = 0;
 
     var d = app.documents.add( !hiding );
     d.insertLabel('build_by_ean13barcodegenerator', 'true');
@@ -86,6 +90,8 @@ var BarcodeDrawer = (function () {
     app.marginPreferences.left   = originalMarginPreference.left  ;
     app.marginPreferences.bottom = originalMarginPreference.bottom;
     app.marginPreferences.right  = originalMarginPreference.right ;
+    app.marginPreferences.columnCount  = originalMarginPreference.columnCount;
+    app.marginPreferences.columnGutter = originalMarginPreference.columnGutter;
 
     return d;
   }

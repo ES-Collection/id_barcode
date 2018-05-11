@@ -33,34 +33,315 @@
 
 $.localize = false; // enable ExtendScript localisation engine
 
-var version = 0.4;
+var version = 0.5;
 var debug   = true;
 
-// Template preset
-var standardPreset = { name               : "Standard",
-                       version            : version,
-                       pageIndex          : -1,
-                       ean                : "",
-                       addon              : "",
-                       codeFont           : "OCR BARCODE\tRegular",
-                       readFont           : "OCR BARCODE\tRegular",
-                       readFontTracking   : 0,
-                       whiteBox           : true,
-                       humanReadable      : true,
-                       alignTo            : "Page Margins",
-                       selectionBounds    : [0,0,0,0],
-                       refPoint           : "BOTTOM_RIGHT_ANCHOR",
-                       offset             : { x: 0, y: 0 },
-                       humanReadableStr   : "",
-                       dpi                : 300,
-                       bwr                : { value: 0, unit: "inch" },
-                       createOulines      : true,
-                       heightPercent      : 100,
-                       scalePercent       : 80,
-                       qZoneIndicator     : true,
-                       addQuietZoneMargin : 0 };
+var Barcode_Settings_Schema = {
+  "type": "object",
+  "$schema": "http://json-schema.org/draft-06/schema#",
+  "properties": {
+    "name": {
+      "$id": "/properties/name",
+      "type": "string",
+      "title": "Name",
+      "description": "The name of the preset, this will show in UI drop-down.",
+      "default": "New Preset",
+      "examples": [
+        "My Barcode Preset"
+      ]
+    },
+    "version": {
+      "$id": "/properties/version",
+      "type": "number",
+      "minimum": 0.1,
+      "title": "Version",
+      "description": "Script version that generated the preset.",
+      "default": version,
+      "examples": [
+        1.2
+      ]
+    },
+    "pageIndex": {
+      "$id": "/properties/pageIndex",
+      "type": "integer",
+      "minimum": -1,
+      "title": "Pageindex",
+      "description": "An explanation about the purpose of this instance.",
+      "default": 0,
+      "examples": [
+        5
+      ]
+    },
+    "ean": {
+      "$id": "/properties/ean",
+      "type": "string",
+      "title": "Ean",
+      "description": "The EAN number including checkdigit (Can contain X)",
+      "default": "",
+      "examples": [
+        "5901234123457"
+      ]
+    },
+    "addon": {
+      "$id": "/properties/addon",
+      "type": "string",
+      "title": "Addon",
+      "description": "2-digit EAN-2, or 5-digit EAN-5 supplemental code.",
+      "default": "",
+      "examples": [
+        "12"
+      ]
+    },
+    "codeFont": {
+      "$id": "/properties/codeFont",
+      "type": "string",
+      "title": "Codefont",
+      "description": "The font name and style to be used by for the machine readable numbers.",
+      "default": "",
+      "examples": [
+        "OCR-B\tRegular"
+      ]
+    },
+    "readFont": {
+      "$id": "/properties/readFont",
+      "type": "string",
+      "title": "Readfont",
+      "description": "The font name and style to be used by for the human readable numbers.",
+      "default": "",
+      "examples": [
+        "OCR-B\tRegular"
+      ]
+    },
+    "readFontTracking": {
+      "$id": "/properties/readFontTracking",
+      "type": "integer",
+      "title": "Readfonttracking",
+      "description": "The tracking to be aplied to the human readable font",
+      "default": 0,
+      "examples": [
+        -120
+      ]
+    },
+    "whiteBox": {
+      "$id": "/properties/whiteBox",
+      "type": "boolean",
+      "title": "Whitebox",
+      "description": "Should the barcode have a white/paper coloured background.",
+      "default": false,
+      "examples": [
+        true
+      ]
+    },
+    "humanReadable": {
+      "$id": "/properties/humanReadable",
+      "type": "boolean",
+      "title": "Humanreadable",
+      "description": "Add the human readable string to the barcode?",
+      "default": false,
+      "examples": [
+        true
+      ]
+    },
+    "alignTo": {
+      "$id": "/properties/alignTo",
+      "type": "string",
+      "title": "Alignto",
+      "description": "Align barcode to something?",
+      "default": "",
+      "examples": [
+        "Page",
+        "Page Margins",
+        "selection"
+      ]
+    },
+    "selectionBounds": {
+      "$id": "/properties/selectionBounds",
+      "type": "array",
+      "description": "Array of Measurement Units in format [y1, x1, y2, x2]",
+      "maxItems": 4,
+      "minItems": 4,
+      "items": {
+        "$id": "/properties/selectionBounds/items",
+        "type": "number",
+        "title": "geometricBounds",
+        "description": "coordinate value",
+        "default": 0,
+        "examples": [
+          135.456, -20.34, 15
+        ]
+      }
+    },
+    "refPoint": {
+      "$id": "/properties/refPoint",
+      "type": "string",
+      "title": "Refpoint",
+      "description": "A reference point for barcode alignment.",
+      "default": "",
+      "examples": [
+        "BOTTOM_RIGHT_ANCHOR"
+      ]
+    },
+    "offset": {
+      "$id": "/properties/offset",
+      "type": "object",
+      "description": "A offset used when drawing the barcode.",
+      "properties": {
+        "x": {
+          "$id": "/properties/offset/properties/x",
+          "type": "number",
+          "title": "X",
+          "default": 0,
+          "examples": [
+            -20.255
+          ]
+        },
+        "y": {
+          "$id": "/properties/offset/properties/y",
+          "type": "number",
+          "title": "Y",
+          "default": 0,
+          "examples": [
+            12
+          ]
+        }
+      }
+    },
+    "humanReadableStr": {
+      "$id": "/properties/humanReadableStr",
+      "type": "string",
+      "title": "Humanreadablestr",
+      "description": "The human readable string to be used.",
+      "default": "",
+      "examples": [
+        "ISSN: 0123-460"
+      ]
+    },
+    "dpi": {
+      "$id": "/properties/dpi",
+      "type": "integer",
+      "title": "Dpi",
+      "description": "The DPI of output device.",
+      "default": 0,
+      "examples": [
+        300
+      ]
+    },
+    "bwr": {
+      "$id": "/properties/bwr",
+      "type": "object",
+      "description": "Bar Width Reduction value",
+      "properties": {
+        "value": {
+          "$id": "/properties/bwr/properties/value",
+          "type": "number",
+          "title": "Value",
+          "default": 0,
+          "examples": [
+            0, -0.002, 0.0125
+          ]
+        },
+        "unit": {
+          "$id": "/properties/bwr/properties/unit",
+          "type": "string",
+          "title": "Unit",
+          "description": "Measure Unit",
+          "default": "",
+          "examples": [
+            "inch"
+          ]
+        }
+      }
+    },
+    "createOulines": {
+      "$id": "/properties/createOulines",
+      "type": "boolean",
+      "title": "Createoulines",
+      "description": "Convert text to outlines?",
+      "default": true
+    },
+    "heightPercent": {
+      "$id": "/properties/heightPercent",
+      "type": "integer",
+      "title": "Heightpercent",
+      "description": "Adjust the height of the barcode/",
+      "default": 100
+    },
+    "scalePercent": {
+      "$id": "/properties/scalePercent",
+      "type": "integer",
+      "title": "Scalepercent",
+      "description": "Adjust scale of barcode.",
+      "default": 100
+    },
+    "qZoneIndicator": {
+      "$id": "/properties/qZoneIndicator",
+      "type": "boolean",
+      "title": "Qzoneindicator",
+      "description": "Add light margin indicator",
+      "default": true
+    },
+    "addQuietZoneMargin": {
+      "$id": "/properties/addQuietZoneMargin",
+      "type": "integer", // Change to array [top, right, bottom, left]
+      "title": "Addquietzonemargin",
+      "description": "Add extra quite zone or margins to the barcode.",
+      "default": 0,
+      "examples": [
+        10
+      ]
+    }
+  }
+}
 
-var standardPresets = [standardPreset];
+// Template presets
+var standardPresets = [ { name              : "Penguin Books",
+                          version            : version,
+                          pageIndex          : -1,
+                          ean                : "",
+                          addon              : "",
+                          codeFont           : "OCR BARCODE\tRegular",
+                          readFont           : "OCR BARCODE\tRegular",
+                          readFontTracking   : 0,
+                          whiteBox           : true,
+                          humanReadable      : true,
+                          alignTo            : "Page Margins",
+                          selectionBounds    : [0,0,0,0],
+                          refPoint           : "BOTTOM_RIGHT_ANCHOR",
+                          offset             : { x: 0, y: 0 },
+                          humanReadableStr   : "",
+                          dpi                : 1200,
+                          bwr                : { value: 0.00125, unit: "inch" },
+                          createOulines      : true,
+                          heightPercent      : 60,
+                          scalePercent       : 95,
+                          qZoneIndicator     : false,
+                          addQuietZoneMargin : 0
+                        },
+
+                        { name               : "Standard",
+                          version            : version,
+                          pageIndex          : -1,
+                          ean                : "",
+                          addon              : "",
+                          codeFont           : "OCR BARCODE\tRegular",
+                          readFont           : "OCR BARCODE\tRegular",
+                          readFontTracking   : 0,
+                          whiteBox           : true,
+                          humanReadable      : true,
+                          alignTo            : "Page Margins",
+                          selectionBounds    : [0,0,0,0],
+                          refPoint           : "BOTTOM_RIGHT_ANCHOR",
+                          offset             : { x: 0, y: 0 },
+                          humanReadableStr   : "",
+                          dpi                : 1200,
+                          bwr                : { value: 0, unit: "inch" },
+                          createOulines      : true,
+                          heightPercent      : 100,
+                          scalePercent       : 80,
+                          qZoneIndicator     : true,
+                          addQuietZoneMargin : 0
+                        }
+                      ];
 
 // ------------------------
 // END of barcode_header.js
@@ -355,82 +636,1534 @@ var polyPlotter = function( options ) {
 // End polyPlotter.js
 /*
 
-    jaxon.jsxinc
+    jaxon.js
 
-    An array based preset manager for extendscript    
+    A array based preset manager for extendscript    
 
     Bruno Herfst 2017
 
-    Version 1.2.3
-    
+    Version 2.3
+
     MIT license (MIT)
     
-    https://github.com/GitBruno/ESPM
+    https://github.com/GitBruno/Jaxon
 
 */
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Start ExtendScript Poly fills v1.1
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// ARRAY
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+if (!Array.isArray) {
+  Array.isArray = function(arg) {
+    return Object.prototype.toString.call(arg) === '[object Array]';
+  };
+}
+
+// Production steps of ECMA-262, Edition 5, 15.4.4.18
+// Reference: http://es5.github.io/#x15.4.4.18
+if (!Array.prototype.forEach) {
+  Array.prototype.forEach = function(callback/*, thisArg*/) {
+    var T, k;
+
+    if (this == null) {
+      throw new TypeError('this is null or not defined');
+    }
+
+    var O   = Object(this);
+    var len = O.length >>> 0;
+    if (typeof callback !== 'function') {
+      throw new TypeError(callback + ' is not a function');
+    }
+
+    if (arguments.length > 1) {
+      T = arguments[1];
+    }
+
+    k = 0;
+
+    while (k < len) {
+      var kValue;
+      if (k in O) {
+        kValue = O[k];
+        callback.call(T, kValue, k, O);
+      }
+      k++;
+    }
+  };
+}
+
+if (!Array.prototype.indexOf) {
+  Array.prototype.indexOf = function (vMember, nStartFrom) {
+
+    if (this == null) {
+      throw new TypeError("Array.prototype.indexOf() - can't convert `" + this + "` to object");
+    }
+
+    var
+      nIdx = isFinite(nStartFrom) ? Math.floor(nStartFrom) : 0,
+      oThis = this instanceof Object ? this : new Object(this),
+      nLen = isFinite(oThis.length) ? Math.floor(oThis.length) : 0;
+
+    if (nIdx >= nLen) {
+      return -1;
+    }
+
+    if (nIdx < 0) {
+      nIdx = Math.max(nLen + nIdx, 0);
+    } 
+
+    if (vMember === undefined) {
+      do {
+        if (nIdx in oThis && oThis[nIdx] === undefined) {
+          return nIdx;
+        }
+      } while (++nIdx < nLen);
+    } else {
+      do {
+        if (oThis[nIdx] === vMember) {
+          return nIdx;
+        }
+      } while (++nIdx < nLen);
+    }
+    return -1;
+  };
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// OBJECT
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+/**
+* Polyfill for Object.keys
+* @see: https://developer.mozilla.org/en-US/docs/JavaScript/Reference/Global_Objects/Object/keys
+*/
+if (!Object.keys) {
+  Object.keys = (function () {
+    var hasOwnProperty = Object.prototype.hasOwnProperty,
+        hasDontEnumBug = !({toString: null}).propertyIsEnumerable('toString'),
+        dontEnums = [
+          'toString',
+          'toLocaleString',
+          'valueOf',
+          'hasOwnProperty',
+          'isPrototypeOf',
+          'propertyIsEnumerable',
+          'constructor'
+        ],
+        dontEnumsLength = dontEnums.length;
+
+    return function (obj) {
+      if (typeof obj !== 'object' && typeof obj !== 'function' || obj === null) throw new TypeError('Object.keys called on non-object');
+
+      var result = [];
+
+      for (var prop in obj) {
+        if (hasOwnProperty.call(obj, prop)) result.push(prop);
+      }
+
+      if (hasDontEnumBug) {
+        for (var i=0; i < dontEnumsLength; i++) {
+          if (hasOwnProperty.call(obj, dontEnums[i])) result.push(dontEnums[i]);
+        }
+      }
+      return result;
+    }
+  })()
+};
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// JSON
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+//  json2.js -> json-es.js
+//  2016-10-28
+//  Public Domain.
+//  NO WARRANTY EXPRESSED OR IMPLIED. USE AT YOUR OWN RISK.
+//  See http://www.JSON.org/js.html
+
+//  This is a reference implementation. You are free to copy, modify, or
+//  redistribute.
+
+//   Adjusted by Bruno Herfst 2017
+//   1. Make it run in ExtendScript
+//   2. Add JSON.clone() function
+//   3. Add JSON.saveFile() function
+//   4. Add JSON.openFile() function
+//   5. Add JSON.ask2Safe() function
+
+// Create a JSON object only if one does not already exist. We create the
+// methods in a closure to avoid creating global variables.
+
+if (typeof JSON !== "object") {
+    JSON = {};
+}
+
+(function () {
+    "use strict";
+
+    var rx_one = /^[\],:{}\s]*$/;
+    var rx_two = /\\(?:["\\\/bfnrt]|u[0-9a-fA-F]{4})/g;
+    var rx_three = /"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g;
+    var rx_four = /(?:^|:|,)(?:\s*\[)+/g;
+    var rx_escapable = /[\\"\u0000-\u001f\u007f-\u009f\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g;
+    var rx_dangerous = /[\u0000\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g;
+
+    function f(n) {
+        // Format integers to have at least two digits.
+        return n < 10
+            ? "0" + n
+            : n;
+    }
+
+    function this_value() {
+        return this.valueOf();
+    }
+
+    if (typeof Date.prototype.toJSON !== "function") {
+
+        Date.prototype.toJSON = function () {
+
+            return isFinite(this.valueOf())
+                ? this.getUTCFullYear() + "-" +
+                        f(this.getUTCMonth() + 1) + "-" +
+                        f(this.getUTCDate()) + "T" +
+                        f(this.getUTCHours()) + ":" +
+                        f(this.getUTCMinutes()) + ":" +
+                        f(this.getUTCSeconds()) + "Z"
+                : null;
+        };
+
+        Boolean.prototype.toJSON = this_value;
+        Number.prototype.toJSON = this_value;
+        String.prototype.toJSON = this_value;
+    }
+
+    var gap;
+    var indent;
+    var meta;
+    var rep;
+
+
+    function quote(string) {
+
+// If the string contains no control characters, no quote characters, and no
+// backslash characters, then we can safely slap some quotes around it.
+// Otherwise we must also replace the offending characters with safe escape
+// sequences.
+
+        rx_escapable.lastIndex = 0;
+        return rx_escapable.test(string)
+            ? "\"" + string.replace(rx_escapable, function (a) {
+                var c = meta[a];
+                return typeof c === "string"
+                    ? c
+                    : "\\u" + ("0000" + a.charCodeAt(0).toString(16)).slice(-4);
+            }) + "\""
+            : "\"" + string + "\"";
+    }
+
+
+    function str(key, holder) {
+
+// Produce a string from holder[key].
+
+        var i;          // The loop counter.
+        var k;          // The member key.
+        var v;          // The member value.
+        var length;
+        var mind = gap;
+        var partial;
+        var value = holder[key];
+
+// If the value has a toJSON method, call it to obtain a replacement value.
+
+        if (value && typeof value === "object" &&
+                typeof value.toJSON === "function") {
+            value = value.toJSON(key);
+        }
+
+// If we were called with a replacer function, then call the replacer to
+// obtain a replacement value.
+
+        if (typeof rep === "function") {
+            value = rep.call(holder, key, value);
+        }
+
+// What happens next depends on the value's type.
+
+        switch (typeof value) {
+        case "string":
+            return quote(value);
+
+        case "number":
+
+// JSON numbers must be finite. Encode non-finite numbers as null.
+
+            return isFinite(value)
+                ? String(value)
+                : "null";
+
+        case "boolean":
+        case "null":
+
+// If the value is a boolean or null, convert it to a string. Note:
+// typeof null does not produce "null". The case is included here in
+// the remote chance that this gets fixed someday.
+
+            return String(value);
+
+// If the type is "object", we might be dealing with an object or an array or
+// null.
+
+        case "object":
+
+// Due to a specification blunder in ECMAScript, typeof null is "object",
+// so watch out for that case.
+
+            if (!value) {
+                return "null";
+            }
+
+// Make an array to hold the partial results of stringifying this object value.
+
+            gap += indent;
+            partial = [];
+
+// Is the value an array?
+
+            if (Object.prototype.toString.apply(value) === "[object Array]") {
+
+// The value is an array. Stringify every element. Use null as a placeholder
+// for non-JSON values.
+
+                length = value.length;
+                for (i = 0; i < length; i += 1) {
+                    partial[i] = str(i, value) || "null";
+                }
+
+// Join all of the elements together, separated with commas, and wrap them in
+// brackets.
+
+                v = partial.length === 0
+                    ? "[]"
+                    : gap
+                        ? "[\n" + gap + partial.join(",\n" + gap) + "\n" + mind + "]"
+                        : "[" + partial.join(",") + "]";
+                gap = mind;
+                return v;
+            }
+
+// If the replacer is an array, use it to select the members to be stringified.
+
+            if (rep && typeof rep === "object") {
+                length = rep.length;
+                for (i = 0; i < length; i += 1) {
+                    if (typeof rep[i] === "string") {
+                        k = rep[i];
+                        v = str(k, value);
+                        if (v) {
+                            partial.push(quote(k) + (
+                                gap
+                                    ? ": "
+                                    : ":"
+                            ) + v);
+                        }
+                    }
+                }
+            } else {
+
+// Otherwise, iterate through all of the keys in the object.
+
+                for (k in value) {
+                    if (Object.prototype.hasOwnProperty.call(value, k)) {
+                        v = str(k, value);
+                        if (v) {
+                            partial.push(quote(k) + (
+                                gap
+                                    ? ": "
+                                    : ":"
+                            ) + v);
+                        }
+                    }
+                }
+            }
+
+// Join all of the member texts together, separated with commas,
+// and wrap them in braces.
+
+            v = partial.length === 0
+                ? "{}"
+                : gap
+                    ? "{\n" + gap + partial.join(",\n" + gap) + "\n" + mind + "}"
+                    : "{" + partial.join(",") + "}";
+            gap = mind;
+            return v;
+        }
+    }
+
+// If the JSON object does not yet have a stringify method, give it one.
+
+    if (typeof JSON.stringify !== "function") {
+        meta = {    // table of character substitutions
+            "\b": "\\b",
+            "\t": "\\t",
+            "\n": "\\n",
+            "\f": "\\f",
+            "\r": "\\r",
+            "\"": "\\\"",
+            "\\": "\\\\"
+        };
+        JSON.stringify = function (value, replacer, space) {
+
+// The stringify method takes a value and an optional replacer, and an optional
+// space parameter, and returns a JSON text. The replacer can be a function
+// that can replace values, or an array of strings that will select the keys.
+// A default replacer method can be provided. Use of the space parameter can
+// produce text that is more easily readable.
+
+            var i;
+            gap = "";
+            indent = "";
+
+// If the space parameter is a number, make an indent string containing that
+// many spaces.
+
+            if (typeof space === "number") {
+                for (i = 0; i < space; i += 1) {
+                    indent += " ";
+                }
+
+// If the space parameter is a string, it will be used as the indent string.
+
+            } else if (typeof space === "string") {
+                indent = space;
+            }
+
+// If there is a replacer, it must be a function or an array.
+// Otherwise, throw an error.
+
+            rep = replacer;
+            if (replacer && typeof replacer !== "function" &&
+                    (typeof replacer !== "object" ||
+                    typeof replacer.length !== "number")) {
+                throw new Error("JSON.stringify");
+            }
+
+// Make a fake root object containing our value under the key of "".
+// Return the result of stringifying the value.
+
+            return str("", {"": value});
+        };
+    }
+
+
+// If the JSON object does not yet have a parse method, give it one.
+
+    if (typeof JSON.parse !== "function") {
+        JSON.parse = function (text, reviver) {
+
+// The parse method takes a text and an optional reviver function, and returns
+// a JavaScript value if the text is a valid JSON text.
+
+            var j;
+
+            function walk(holder, key) {
+
+// The walk method is used to recursively walk the resulting structure so
+// that modifications can be made.
+
+                var k;
+                var v;
+                var value = holder[key];
+                if (value && typeof value === "object") {
+                    for (k in value) {
+                        if (Object.prototype.hasOwnProperty.call(value, k)) {
+                            v = walk(value, k);
+                            if (v !== undefined) {
+                                value[k] = v;
+                            } else {
+                                delete value[k];
+                            }
+                        }
+                    }
+                }
+                return reviver.call(holder, key, value);
+            }
+
+
+// Parsing happens in four stages. In the first stage, we replace certain
+// Unicode characters with escape sequences. JavaScript handles many characters
+// incorrectly, either silently deleting them, or treating them as line endings.
+
+            text = String(text);
+            rx_dangerous.lastIndex = 0;
+            if (rx_dangerous.test(text)) {
+                text = text.replace(rx_dangerous, function (a) {
+                    return "\\u" +
+                            ("0000" + a.charCodeAt(0).toString(16)).slice(-4);
+                });
+            }
+
+// In the second stage, we run the text against regular expressions that look
+// for non-JSON patterns. We are especially concerned with "()" and "new"
+// because they can cause invocation, and "=" because it can cause mutation.
+// But just to be safe, we want to reject all unexpected forms.
+
+// We split the second stage into 4 regexp operations in order to work around
+// crippling inefficiencies in IE's and Safari's regexp engines. First we
+// replace the JSON backslash pairs with "@" (a non-JSON character). Second, we
+// replace all simple value tokens with "]" characters. Third, we delete all
+// open brackets that follow a colon or comma or that begin the text. Finally,
+// we look to see that the remaining characters are only whitespace or "]" or
+// "," or ":" or "{" or "}". If that is so, then the text is safe for eval.
+
+            if (
+                rx_one.test(
+                    text
+                        .replace(rx_two, "@")
+                        .replace(rx_three, "]")
+                        .replace(rx_four, "")
+                )
+            ) {
+
+// In the third stage we use the eval function to compile the text into a
+// JavaScript structure. The "{" operator is subject to a syntactic ambiguity
+// in JavaScript: it can begin a block or an object literal. We wrap the text
+// in parens to eliminate the ambiguity.
+
+                j = eval("(" + text + ")");
+
+// In the optional fourth stage, we recursively walk the new structure, passing
+// each name/value pair to a reviver function for possible transformation.
+
+                return (typeof reviver === "function")
+                    ? walk({"": j}, "")
+                    : j;
+            }
+
+// If the text is not JSON parseable, then a SyntaxError is thrown.
+
+            throw new SyntaxError("JSON.parse");
+        };
+    };
+
+    if (typeof JSON.clone !== "function") {
+
+// The clone method takes a JSON object and returns a clone of the JSON object.
+
+        JSON.clone = function ( value ) {
+            if (typeof value === undefined) {
+                return undefined;
+            }
+            return JSON.parse(JSON.stringify(value));
+        }
+    };
+
+    if (typeof JSON.saveFile !== "function") {
+
+// The saveFile method takes an ExtendScript File object and any instance and saves it the the given File.
+
+        JSON.saveFile = function (File, Obj){
+            var objStr = JSON.stringify(Obj);
+            File.open('w');
+            var ok = File.write(objStr);
+            if (ok) {
+                ok = File.close();
+            }
+            if (!ok) {
+                alert("JSON: Error saving file. \n" + File.error);
+                File.close();
+            }
+            return Obj;
+        }
+    };
+
+    if (typeof JSON.openFile !== "function") {
+
+// The saveFile method takes an ExtendScript File object and any instance and saves it the the given File.
+
+        JSON.openFile = function (File){
+            var obj = {};
+            if(File !== false){
+                File.open('r');
+                content = File.read();
+                obj = JSON.parse(content);
+                File.close();
+            }else{
+                alert("JSON: Could not open file."); // if something went wrong
+            }
+            return obj;
+        }
+    };
+
+    if (typeof JSON.ask2Safe !== "function") {
+
+// The ask2Safe method is similar to saveFile method. Except that it will ask the user first
+
+        JSON.ask2Safe = function (question, File, Obj){
+            var save = confirm(question);
+            if(save){
+                JSON.saveFile(File, Obj);
+            }
+            return save;
+        }
+    };
+
+}());
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// End ExtendScript Poly fills
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+/*
+
+  JSON Schema Instantiator
+  
+  https://github.com/tomarad/JSON-Schema-Instantiator
+  
+  The MIT License (MIT)
+
+  Copyright (c) 2015 Tom Arad
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy of this software 
+  and associated documentation files (the "Software"), to deal in the Software without restriction,
+  including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, 
+  and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, 
+  subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all copies 
+  or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
+  INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
+  PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
+  FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
+  ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+*/
+
+var Instantiator = function() {
+    //////////////
+    // privates //
+    //////////////
+    
+    'use strict';
+    
+    // The JSON Object that defines the default values of certain types.
+    var typesInstantiator = {
+      'string': '',
+      'number': 0,
+      'integer': 0,
+      'null': null,
+      'boolean': false, // Always stay positive?
+      'object': { }
+    };
+
+    /**
+     * Checks whether a variable is a primitive.
+     * @param obj - an object.
+     * @returns {boolean}
+     */
+    function isPrimitive(obj) {
+      var type = obj.type;
+
+      return typesInstantiator[type] !== undefined;
+    }
+
+    /**
+     * Checks whether a property is on required array.
+     * @param property - the property to check.
+     * @param requiredArray - the required array
+     * @returns {boolean}
+     */
+    function isPropertyRequired(property, requiredArray) {
+      var found = false;
+      requiredArray = requiredArray || [];
+      requiredArray.forEach(function(requiredProperty) {
+          if (requiredProperty === property) {
+            found = true;
+          }
+      });
+      return found;
+    }
+
+
+    function shouldVisit(property, obj, options) {
+        return (!options.requiredPropertiesOnly) || (options.requiredPropertiesOnly && isPropertyRequired(property, obj.required));
+    }
+
+    /**
+     * Instantiate a primitive.
+     * @param val - The object that represents the primitive.
+     * @returns {*}
+     */
+    function instantiatePrimitive(val) {
+      var type = val.type;
+
+      // Support for default values in the JSON Schema.
+      if (val.default) {
+        return val.default;
+      }
+
+      return typesInstantiator[type];
+    }
+
+    /**
+     * Checks whether a variable is an enum.
+     * @param obj - an object.
+     * @returns {boolean}
+     */
+    function isEnum(obj) {
+      return Object.prototype.toString.call(obj.enum) === '[object Array]';
+    }
+
+    /**
+     * Checks whether a variable is an array.
+     * @param obj - an object.
+     * @returns {boolean}
+     */
+    function isArray(obj) {
+      return Array.isArray(obj);
+    }
+
+    /**
+     * Extracts the type of the object.
+     * If the type is an array, set type to first in list of types.
+     * If obj.type is not overridden, it will fail the isPrimitive check.
+     * Which internally also checks obj.type.
+     * @param obj - An object.
+    */
+    function getObjectType(obj) {
+      // Check if type is array of types.
+      if (isArray(obj.type)) {
+        obj.type = obj.type[0];
+      }
+
+      return obj.type;
+    }
+
+    /**
+     * Instantiate an enum.
+     * @param val - The object that represents the primitive.
+     * @returns {*}
+     */
+    function instantiateEnum(val) {
+      // Support for default values in the JSON Schema.
+      if (val.default) {
+          return val.default;
+      }
+      if (!val.enum.length) {
+          return undefined;
+      }
+      return val.enum[0];
+    }
+
+    /**
+     * The main function.
+     * Calls sub-objects recursively, depth first, using the sub-function 'visit'.
+     * @param schema - The schema to instantiate.
+     * @returns {*}
+     */
+    function instantiate(schema, options) {
+      options = options || {};
+
+      // Set requiredPropertiesOnly to true if not defined
+      if ( typeof options.requiredPropertiesOnly === 'undefined') options.requiredPropertiesOnly = true;
+  
+      /**
+       * Visits each sub-object using recursion.
+       * If it reaches a primitive, instantiate it.
+       * @param obj - The object that represents the schema.
+       * @param name - The name of the current object.
+       * @param data - The instance data that represents the current object.
+       */
+      function visit(obj, name, data) {
+        if (!obj) {
+          return;
+        }
+
+        var i;
+        var type = getObjectType(obj);
+
+        // We want non-primitives objects (primitive === object w/o properties).
+        if (type === 'object' && obj.properties) {
+          data[name] = data[name] || { };
+
+          // Visit each property.
+          for (var property in obj.properties) {
+            if (obj.properties.hasOwnProperty(property)) {
+              if (shouldVisit(property, obj, options)) {
+                visit(obj.properties[property], property, data[name]);
+              }
+            }
+          }
+        } else if (obj.allOf) {
+          for (i = 0; i < obj.allOf.length; i++) {
+            visit(obj.allOf[i], name, data);
+          }
+        } else if (type === 'array') {
+          data[name] = [];
+          var len = 0;
+          if (obj.minItems || obj.minItems > 0) {
+            len = obj.minItems;
+          }
+
+          // Instantiate 'len' items.
+          for (i = 0; i < len; i++) {
+            visit(obj.items, i, data[name]);
+          }
+        } else if (isEnum(obj)) {
+          data[name] = instantiateEnum(obj);
+        } else if (isPrimitive(obj)) {
+          data[name] = instantiatePrimitive(obj);
+        }
+      }
+
+      var data = {};
+      visit(schema, 'kek', data);
+      return data['kek'];
+    }
+
+    ////////////
+    // expose //
+    ////////////
+    return {
+        instantiate : instantiate
+    };
+}();
+/*
+ * Jassi v0.1.2
+ * https://github.com/iclanzan/jassi
+ *
+ * Copyright (c) 2014 Sorin Iclanzan <sorin@iclanzan.com>
+ * License: https://github.com/iclanzan/jassi
+ */
+
+
+var Validator = function() {
+    //////////////
+    // privates //
+    //////////////
+    
+    
+    'use strict';
+
+    var isArray = Array.isArray;
+    var keys = Object.keys;
+
+    /**
+     * Check if a given value is an instance of a JSON object.
+     * This means that arrays and the null object are not considered objects.
+     *
+     * @param  {any}     value Any value to be checked
+     * @return {Boolean}       Returns true if the value is an instance of a JSON object, false otherwise.
+     */
+    function isObject(value) {
+      return null !== value && typeof value == 'object' && !isArray(value);
+    }
+
+    /**
+     * Get the type of a value.
+     *
+     * JSON primitive types:
+     * Array, Boolean, Number, null, Object, String
+     *
+     * @param  {any}    value Any value
+     * @return {String}       One of the JSON primitive types.
+     */
+    function getType(value) {
+      if( isObject(value) ) return 'object';
+      if( isArray (value) ) return 'array';
+      if( null === value  ) return 'null';
+      return typeof value;     
+    }
+
+    /**
+     * Check if two items are equal as per the JSON Schema spec.
+     *
+     * @param  {any}     item1 The first item
+     * @param  {any}     item2 The second item
+     * @return {Boolean}       Returns true if the items are equal.
+     */
+    function areEqual(item1, item2) {
+      var type1 = getType(item1);
+      var type2 = getType(item2);
+      var i, l, keys1, keys2, key;
+
+      if (type1 != type2) return false;
+
+      if ('array' == type1) {
+        if (item1.length !== item2.length) return false;
+
+        for (i = 0, l = item1.length; i < l; i ++)
+          if (!areEqual(item1[i], item2[i])) return false;
+
+        return true;
+      }
+
+      if ('object' == type1) {
+        keys1 = keys(item1);
+        keys2 = keys(item2);
+
+        if (keys1.length !== keys2.length) return false;
+
+        for (i = 0, l = keys1.length; i < l; i ++) {
+          key = keys1[i];
+          if (!item2.hasOwnProperty(key) || !areEqual(item1[key], item2[key])) return false;
+        }
+
+        return true;
+      }
+
+      return item1 === item2;
+    }
+
+    function or(item1, item2) {
+      return undefined !== item1 ? item1 : item2;
+    }
+
+    /**
+     * Validate a JSON instance against a schema.
+     *
+     * The function returns an empty array if validation is successful.
+     *
+     * @param  {any}    instance An instance of a JSON data that needs to be validated
+     * @param  {Object} schema   The schema to validate the instance against
+     * @param  {String} path     Optional. The path to the property that is being validated.
+     * @return {Array}           An array of objects describing validation errors.
+     */
+    var validate = function(instance, schema, path) {
+      var errors = [], type, l, i, j, items, itemsIsArray, additional, additionalIsObject, found, properties, pattern, pp;
+
+      function addError(message) {
+        errors.push({property:path, message: message});
+        return errors;
+      }
+
+      if (undefined === path) path = '';
+
+      if (!isObject(schema)) return addError('Invalid schema.');
+
+      type = getType(instance);
+      if (schema.type) {
+        items = isArray(schema.type) ? schema.type : [schema.type];
+        if (!~items.indexOf(type) && (type != 'number' || !~items.indexOf('integer') || instance % 1 != 0)) {
+          addError('Invalid type. Was expecting ' + schema.type + ' but found ' + type + '.');
+        }
+      }
+
+      if ('array' == type) {
+        l = instance.length;
+
+        if (schema.items || schema.additionalItems) {
+          items = schema.items || {};
+          itemsIsArray = isArray(schema.items);
+
+          additional = schema.additionalItems;
+          additionalIsObject = isObject(schema.additionalItems);
+
+          if (itemsIsArray && false === additional && l > (j = items.length))
+            addError('The instance can only have up to ' + j + ' items.');
+
+          else for (i = 0; i < l; i ++)
+            errors = errors.concat(validate(
+              instance[i],
+              itemsIsArray ? items[i] || additionalIsObject && additional || {} : items,
+              path + '[' + i + ']'
+            ));
+        }
+
+        if (schema.maxItems && l > schema.maxItems)
+          addError('There must be a maximum of ' + schema.maxItems + ' item(s) in the array.');
+
+        if (schema.minItems && l < schema.minItems)
+          addError('There must be a minimum of ' + schema.minItems + ' item(s) in the array.');
+
+        if (schema.uniqueItems) {
+          dance: for (i = 0; i < l; i ++) {
+            for (j = i + 1; j < l; j ++) {
+              if (areEqual(instance[i], instance[j])) {
+                addError("The items in the array must be unique.");
+                break dance;
+              }
+            }
+          }
+        }
+      }
+
+      if ('object' == type) {
+        if (schema.maxProperties && keys(instance).length > schema.maxProperties)
+          addError('The instance must have at most ' + schema.maxProperties + ' members.');
+
+        if (schema.minProperties && keys(instance).length < schema.minProperties)
+          addError('The instance must have at least ' + schema.minProperties + ' members.');
+
+        if (schema.required)
+          schema.required.forEach(function(requiredProperty) {
+            if (!instance.hasOwnProperty(requiredProperty))
+              addError('Required property "' + requiredProperty + '" is missing.');
+          });
+
+        if (schema.properties || schema.additionalProperties || schema.patternProperties) {
+          properties = or(schema.properties, {});
+          pattern = or(schema.patternProperties, {});
+          additional = or(schema.additionalProperties, {});
+          pp = keys(pattern);
+        }
+
+        keys(instance).forEach(function(key) {
+          var schemas, dependency;
+
+          if (schema.dependencies && (dependency = schema.dependencies[key])) {
+            if (isArray(dependency)) {
+              dependency.forEach(function (prop) {
+                if (!instance.hasOwnProperty(prop)) {
+                  addError('Property "' + key + '" requires "' + prop + '" to also be present.');
+                }
+              });
+            }
+            else {
+              errors = errors.concat(validate(instance, dependency, path));
+            }
+          }
+
+          if (
+            properties &&
+            false === additional &&
+            !properties.hasOwnProperty(key) &&
+            !(pp && pp.some(function(regex) { return key.match(regex); }))
+          )
+            addError('The key "' + key + '" is not allowed to be set.');
+
+          else {
+            schemas = [];
+            if (properties && properties.hasOwnProperty(key))
+              schemas.push(properties[key]);
+        
+            pp && pp.forEach(function(regex) {
+              if (key.match(regex) && pattern[regex]) {
+                schemas.push(pattern[regex]);
+              }
+            });
+
+            if (!schemas.length && additional)
+              schemas.push(additional);
+
+            schemas.forEach(function(schema) {
+              errors = errors.concat(validate(instance[key], schema, path ? path + '.' + key : key));
+            });
+          }
+        });
+      }
+
+      if ('string' == type) {
+        if (schema.maxLength && instance.length > schema.maxLength)
+          addError('The instance must not be more than ' + schema.maxLength + ' character(s) long.');
+
+        if (schema.minLength && instance.length < schema.minLength)
+          addError('The instance must be at least ' + schema.minLength + ' character(s) long.');
+
+        if (schema.pattern && !instance.match(schema.pattern))
+          addError('Regex pattern /' + schema.pattern + '/ is a mismatch.');
+      }
+
+      if ('number' == type) {
+        if (schema.multipleOf !== undefined && instance / schema.multipleOf % 1 != 0)
+          addError('The instance is required to be a multiple of ' + schema.multipleOf + '.');
+
+        if (schema.maximum !== undefined) {
+          if (!schema.exclusiveMaximum && schema.maximum < instance)
+            addError('The instance must have a maximum value of ' + schema.maximum + '.');
+
+          if (schema.exclusiveMaximum && schema.maximum <= instance)
+            addError('The instance must be lower than ' + schema.maximum + '.');
+        }
+
+        if (schema.minimum !== undefined) {
+          if (!schema.exclusiveMinimum && schema.minimum > instance)
+            addError('The instance must have a minimum value of ' + schema.minimum + '.');
+
+          if (schema.exclusiveMinimum && schema.minimum >= instance)
+            addError('The instance must be greater than ' + schema.minimum + '.');
+        }
+      }
+
+      if (schema['enum']) {
+        items = schema['enum'];
+        l = items.length;
+        for (i = 0, found = 0; i < l && !found; i++)
+          if (areEqual(items[i], instance))
+            found = 1;
+
+        if (!found) addError('The instance must have one of the following values: ' + items.join(', ') + '.');
+      }
+
+      if (schema.allOf) {
+        schema.allOf.forEach(function(schema) {
+          errors = errors.concat(validate(instance, schema, path));
+        });
+      }
+
+      if (schema.anyOf) {
+        items = schema.anyOf;
+        l = items.length;
+        for(i = 0, found = 0; i < l && !found; i++)
+          if (!validate(instance, items[i], path).length)
+            found = 1;
+
+        if (!found) addError('The instance must validate against at least one schema defined by the "anyOf" keyword.');
+      }
+
+      if (schema.oneOf) {
+        items = schema.oneOf;
+        l = items.length;
+        for (i = 0, found = 0; i < l; i++)
+          if (!validate(instance, items[i], path).length) {
+            if (found) {
+              addError('The instance must validate against exactly one schema defined by the "oneOf" keyword.');
+              break;
+            }
+            found = 1;
+          }
+
+        if (!found) {
+          addError('The instance must validate against one schema defined by the "oneOf" keyword.');      
+        }
+      }
+
+      if (schema.not && !validate(instance, schema.not, path).length)
+        addError('The instance must not validate against the schema defined by the "not" keyword.');
+
+      return errors;
+    };
+
+    ////////////
+    // expose //
+    ////////////
+    return {
+        validate : validate
+    };
+}();
+/*
+
+Copyright (c) 2012 Dmitry Poklonskiy <dimik@ya.ru>
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the 'Software'),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense, 
+and/or sell copies of the Software, and to permit persons to whom the 
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included 
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS 
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER 
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS 
+IN THE SOFTWARE.
+
+*/
+
+/* Adjusted by Bruno Herfst 2017 to run in ExtendScript */
+
+/**
+ * Create the ObjectManager instance.
+ * @class Provide methods for reaching into objects and insert the missing parts
+ * using dot notation mongodb-style query string.
+ * @name ObjectManager
+ * @param {Object|Array} [ctx] Object which we want to resolve.
+ * @param {String} [delim="."] Delimiter for the query string.
+ */
+var ObjectManager = function (ctx, delim) {
+    "string" === typeof ctx && (delim = ctx, ctx = {}); // Shift params.
+
+    this.ctx = ctx || {};
+    this.delim = delim || ".";
+
+    /**
+     * Resolve query through context object.
+     * @private
+     * @function
+     * @name manage
+     * @param {Object|Array} obj Object which we want to resolve, it will always be this.ctx value.
+     * @param {String[]} path Keys/indexes from query.
+     * @param {Number} depth How deep do we go.
+     * @param {Function} callback Will be called on resolving complete(fail).
+     * @param {Boolean} upsert If requested object(s)/array(s) do not exist, insert one.
+     * @returns {Object|Array} Link on the last but one object in query path.
+     */
+    this.manage = function (obj, path, depth, callback, upsert) {
+        var err = null, i, key;
+
+        for (i = 0; i < depth; i++) {
+            key = path[i];
+
+            if(null != obj) {
+                "undefined" === typeof obj[key] && upsert && (obj[key] = isNaN(path[i + 1]) && {} || []); // If next key is an integer - create an array, else create an object.
+                if("undefined" === typeof (obj = obj[key])) {
+                    break;
+                }
+            } else {
+                err = new TypeError("Cannot read property '%s' of ".replace('%s', key) + (null === obj && 'null' || typeof obj));
+                break;
+            }
+        }
+        if(callback) {
+            //async(function () {
+                callback(err && String(err), !err && obj);
+            //});
+        } else {
+            return err || obj;
+        }
+    };
+
+    /**
+     * Getter method of the ObjectManager.
+     * @function
+     * @name ObjectManager.find
+     * @param {String} [query] Query string. If is not specified or an empty string - return resolved object.
+     * @param {Function} [callback] Will be called with 2 params when resolving complete(fail):
+     * 1. null or error description string
+     * 2. value of the certain object[key] or undefined/false
+     * @returns {ObjectManager|Object} If callback is specified return 'this' for chaining calls,
+     * else return resolved value (context object if path is empty string or not specified).
+     */
+    this.find = function (query, callback) {
+        "function" === typeof query && (callback = query, query = false); // Shift params if path not specified.
+
+        var path = query && query.split(this.delim) || [],
+            result = this.manage(this.ctx, path, path.length, callback);
+
+        if(result instanceof Error) {
+            throw result;
+        }
+
+        return callback && this || result;
+    };
+
+    /**
+     * Setter method of the ObjectManager.
+     * @function
+     * @name ObjectManager.update
+     * @param {String} query Query string.
+     * @param value What we want to assign.
+     * @param {Function} [callback] Will be called with 2 params when assigning complete(fail):
+     * 1. null or error description string
+     * 2. updated object or false
+     * @param {Boolean} [upsert=true] If requested object(s)/array(s) do not exist, insert one.
+     * @returns {ObjectManager} For chaining calls.
+     */
+    this.update = function (query, value, callback, upsert) {
+        "boolean" === typeof callback && (upsert = callback, callback = null); // Shift params if callback not specified.
+
+        var path = query && query.split(this.delim) || [],
+            depth = path.length - 1,
+            lastKey = path[depth],
+            upsert = "boolean" === typeof upsert ? upsert : true,
+            ctx = this.ctx,
+            result = callback || this.manage(ctx, path, depth, callback, upsert),
+            set = function (obj, key, val) {
+                return null != obj && key ? obj[key] = val :
+                    new TypeError("Cannot set property '%s' of ".replace('%s', key) + (null === obj && 'null' || typeof obj));
+            };
+
+        if(callback) {
+            this.manage(ctx, path, depth, function (err, obj) {
+                err || (result = set(obj, lastKey, value)) instanceof Error && (err = String(result));
+                callback(err, !err && ctx);
+            }, upsert);
+        } else {
+            if(result instanceof Error || (result = set(result, lastKey, value)) instanceof Error) {
+                throw result;
+            }
+        }
+
+        return this;
+    };
+
+    /**
+     * Apply function with object as context.
+     * @function
+     * @name ObjectManager.apply
+     * @param {String} query Query string.
+     * @param {Function} fn Will be called with this = object, resolved through the query.
+     * @param {Array} args Arguments for function call.
+     */
+    this.apply = function (query, fn, args) {
+        return fn.apply(this.find(query), args);
+    };
+
+    /**
+     * Create a copy of the resolved object.
+     * @function
+     * @name ObjectManager.copy
+     * @param {String} query Query string.
+     * @returns {Object|Boolean} Resolved copy or false.
+     */
+    this.copy = function (query) {
+        var result = this.find(query);
+
+        return "object" === typeof result && JSON.parse(JSON.stringify(result));
+    };
+
+    /**
+     * Create a mixin
+     * @function
+     * @name ObjectManager.mixin
+     * @param {String} query Query string.
+     * @returns {Object} Mixin of the resolved
+     */
+    this.mixin = function () {
+        var query = arguments[0],
+            ctx = this.find(query),
+            result = {},
+            hasOwn = Object.prototype.hasOwnProperty,
+            extend = function (o1, o2) {
+                for (var prop in o2) {
+                    hasOwn.call(o2, prop) && (o1[prop] = o2[prop]);
+                }
+
+                return o1;
+            };
+
+        for (var arg = 1; arg < arguments.length; arg++) {
+            result = extend(result, arguments[arg]);
+        }
+
+        return extend(result, ctx);
+    };
+
+    // Self-invoking constructor
+    if(!(this instanceof ObjectManager)) {
+        return new ObjectManager(delim);
+    }
+};
+
+
+
+var jaw = function( Schema, instance ) {
+    // ref to self
+    var Jaw = this;
+    var manager = new ObjectManager({});
+    var _Schema = {};
+
+    var _isValid = {
+        schema  : true ,
+        managed : true ,
+        all : function(){
+            return (this.schema && this.managed);
+        }
+    };
+
+    var errors = [];
+
+    function setSchema( Schema ){
+        // Validate given schema
+        _Schema = JSON.clone( Schema );
+        // Shema is object, let's make sure it has a type property as well
+        errors = Validator.validate( Jaw.getSchema(), {"type": "object","required": ["type"]} );
+        if( errors.length > 0 ) {
+            _isValid.schema = false;
+            errors.unshift("Schema not valid (Missing type property).");
+            return;
+        }
+
+        // Validating against a fresh instance from schema should always work
+        // If not, there is something wrong with the schema
+        errors = Validator.validate( Jaw.getTemplate( true ), Jaw.getSchema() );
+        if( errors.length > 0 ) {
+            errors.unshift("Schema not valid (Could not generate valid instance from shema).");
+            _isValid.schema = false;
+        }
+    };
+
+    function userException(message) {
+        this.message = message;
+        this.name = 'Error';
+    };
+
+    function setObj( newObj ) {
+        if(_isValid.schema) {
+            errors = Validator.validate( newObj, Jaw.getSchema() );
+            if( errors.length === 0 ) {
+                manager = new ObjectManager(newObj);
+                _isValid.managed = true;
+            }
+        }
+        return Jaw;
+    };
+
+    function copyKeys(fromObj, toObj) {
+        if( (typeof fromObj !== 'object') ||
+            (typeof toObj   !== 'object') ) {
+            throw new userException('copyKeys needs to be given objects');
+        }
+        Object.keys(fromObj).forEach(function(key) {
+            toObj[key] = fromObj[key];
+        });
+    };
+
+    function validateManager(){
+      var result = Validator.validate( manager.find(), Jaw.getSchema() );  
+      if( result.length > 0 ) {
+        errors.push(result);
+        _isValid.managed = false;
+      }
+    };
+
+    //-----------------
+    // Public funcions
+    //-----------------
+    Jaw.isValid = function() {
+        return _isValid.all();
+    };
+
+    Jaw.errors = function() {
+        if(Array.isArray(errors)) {
+            return errors;
+        } else {
+            return [errors];
+        }
+    };
+
+    Jaw.wrap = function( givenObj ) {
+        var newObj = Instantiator.instantiate( Jaw.getSchema() );
+        if(typeof newObj === 'object') {
+            // Copy all keys from given object to new object
+            copyKeys(givenObj, newObj);
+        }
+        setObj( newObj );
+        return Jaw;
+    };
+
+    Jaw.getTemplate = function( allProperties ) {
+        // allProperties = undefined = false = {requiredPropertiesOnly: true}
+        if(typeof allProperties !== 'boolean') {
+            var requiredPropertiesOnly = true; // allProperties == false
+        } else {
+            var requiredPropertiesOnly = !allProperties;
+        }
+        return Instantiator.instantiate( Jaw.getSchema(), {requiredPropertiesOnly: requiredPropertiesOnly} );
+    };
+
+    Jaw.getSchema = function() {
+        return JSON.clone(_Schema);
+    };
+
+    Jaw.get = function( path ) {
+        return manager.find( path );
+    };
+    
+    Jaw.set = function( path, to ) {
+        var check = new ObjectManager( JSON.clone( Jaw.get() ) );
+
+        var result = check.update( path, to, function (resultErr) {
+          errors.push(resultErr);
+        });
+        
+        var err = Validator.validate( check.find(), Jaw.getSchema() );
+
+        var errHandler = function(err, obj) {
+            //err: null or string with error description "TypeError: cannot set property 'undefined' of number"
+            //obj: updated object { a : { b : [{ c : 10 }] } }
+            if( typeof err === "string") {
+                errors.push(resultErr);
+            }
+        }
+
+        if ( err.length > 0 ) {
+          errors.push( err );
+        } else {
+          manager.update( path, to, errHandler);
+          validateManager();
+        }
+        return Jaw;
+    };
+
+    //-----------------
+    // Initialise
+    //-----------------
+    setSchema( Schema );
+    if( errors.length === 0 ) {
+        // Start managing something
+        manager = new ObjectManager( Jaw.getTemplate( false ) );
+    };
+
+    if(Jaw.isValid() && instance) {
+        if(typeof instance !== 'object') {
+            _valid.managed = false;
+            errors.unshift("Initialisation Error: Can't get Jaw arround non-object");
+        } else {
+            Jaw.wrap(instance);
+        }
+    };
+};
 /* -------------------------------------------------------------------------------
     
     @param fileName : String
         Name of file to be saved in user data folder
     
-    @param standardPresets : Array of Objects
-        Array of initial presets that are loaded if no presetsFile is found at filePath
-    
-    @param TemplatePreset : Object
-        A template preset to benchmark against. Also used as default.
-        If not supplied TemplatePreset is first Preset in standardPresets.
+    @param Schema : Object
+        A schema to validate against. Also used to generate defaults
+
+    @param standardPresets : Array
+        Initial presets that are loaded if no presetsFile is found at filePath
 
 ------------------------------------------------------------------------------- */
 
-var presetManager = function( fileName, standardPresets, TemplatePreset ) {
+var presetManager = function( fileName, Schema, standardPresets ) {
     // ref to self
-    var Espm = this;
-
-    // Create copy of standardPresets
-    var standardPresets = JSON.parse(JSON.stringify(standardPresets));
+    var Jaxon    = this;
 
     // standard file path
-    var filePath = Folder.userData + "/" + fileName;
-    
-    Espm.getPresetsFilePath = function () {
-        return filePath;
+    var filePath = Folder.userData + "/" + String(fileName);
+    var valid  = true;
+    var errors = [];
+
+    function userException(message) {
+        this.message = message;
+        this.name = 'Error';
     }
 
-    /////////////////////
-    // T E M P L A T E //
-    /////////////////////
-    if ( typeof TemplatePreset !== 'object' ) {
-        // TemplatePreset is optional
-        TemplatePreset = standardPresets.shift();
+    // S C H E M A S
+    //-------------------------
+    // Load Jaw for preset and validate preset Schema
+    var presetJaw = new jaw( Schema );
+    if(!presetJaw.isValid()) {
+        throw presetJaw.errors()[0];
+    }
+    // Create Schema for standardPresets
+    // This preset manager works on the premise
+    // that presets are objects collected in an array
+    var PresetsSchema = { "type": "array", "items": Schema };
+    var presetsJaws = new jaw( PresetsSchema );
+    if(!presetsJaws.isValid()) {
+        throw userException(presetsJaws.errors());
     }
 
-    var Template = ( function() { 
-        // Create a new template by calling Template.getInstance();
-        function createTemplate() {
-            var newTemplate = new Object();
-            for(var k in TemplatePreset) newTemplate[k]=TemplatePreset[k];
-            return newTemplate;
-        }
-        return {
-            getInstance: function () {
-                return createTemplate();
-            }
-        };
-    })();
+    // Validate standardPresets
+    //-------------------------
+    if ( typeof standardPresets === 'undefined') standardPresets = [Jaws.getTemplate(true)];
+    if ( Array.isArray( standardPresets ) ) {
+        standardPresets = JSON.clone( standardPresets );
+    } else {
+        throw new userException("Param standardPresets needs to be type of array but is " + String(typeof standardPresets));
+    }
+    if(!presetsJaws.wrap(standardPresets).isValid()) {
+        throw userException(presetsJaws.errors());
+    }
 
-    ///////////////////////////////////////
-    // P R I V A T E   F U N C T I O N S //
-    ///////////////////////////////////////
+    //-------------------------------------------------
+    // P R I V A T E   F U N C T I O N S
+    //-------------------------------------------------
+
     function createMsg ( bool, comment ) {
         // Standard return obj
         return {success: Boolean(bool), comment: String( comment ) };
-    }
-
-    function copy_of ( something ) {
-        //clones whatever it is given via JSON conversion
-        return JSON.parse(JSON.stringify( something ));
     }
 
     function not_in_array ( arr, element ) {
@@ -502,7 +2235,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
                 }
             }
         }
-        return copy_of( New_Obj );
+        return JSON.clone( New_Obj );
     }
 
     function updatePreset ( oldPreset, ignoreKeys ) {
@@ -510,14 +2243,14 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         if(! ignoreKeys instanceof Array) {
             throw "The function updatePreset expects ignoreKeys to be instance of Array."
         }
-        if( oldPreset == undefined ) {
-        	return Template.getInstance();
+        if( oldPreset === undefined ) {
+            return presetJaw.getTemplate( true );
         }
         if(! oldPreset instanceof Object) {
-        	throw "The function updatePreset expects Preset to be instance of Object."
+            throw "The function updatePreset expects Preset to be instance of Object."
         }
         // Create a copy of the standard preset
-        var newPreset  = Template.getInstance();
+        var newPreset = presetJaw.getTemplate( true );
         return updateObj( oldPreset, newPreset, ignoreKeys );
     }
 
@@ -530,12 +2263,13 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         // And will be attached to any preset
         var PresetController = this;
         // Create a fresh template
-        var _Preset = Template.getInstance();
+        var _Preset = new jaw( Schema );
 
         var temporaryState = false;
 
         var _hasProp = function( propName ) {
-            if( _Preset.hasOwnProperty( propName ) ){
+            var Preset = _Preset.get();
+            if( Preset.hasOwnProperty( propName ) ){
                 return true;
             } else {
                 alert("UiPreset does not have property " + propName);
@@ -554,34 +2288,34 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
             return temporaryState;
         }
 
-        PresetController.getTemplate = function() {
-            return Template.getInstance();
+        PresetController.getTemplate = function( allProperties ) {
+            // allProperties = undefined = false
+            return presetJaw.getTemplate( allProperties );
         }
 
         PresetController.get = function() {
-            return copy_of( _Preset );
+            return _Preset.get();
         }
 
         PresetController.load = function( Preset ) {
-            _Preset = updatePreset( Preset );
-            return _Preset;
+            _Preset.wrap( updatePreset( Preset ) );
+            if(_Preset.errors().length > 0) {
+                alert("Could not load preset.\n" + JSON.stringify(_Preset.errors()) );
+            }
+
+            return _Preset.get();
         }
         
         // Get and set preset properties
         PresetController.getProp = function( propName ) {
-            var prop = String(propName);
-            if( _hasProp( prop ) ) {
-                return copy_of( _Preset[ prop ] );
-            }
-            alert("Could not get preset property.\nProperty " + prop + " does not exist.");
-            return undefined;
+            return _Preset.get( propName );
         }
 
         PresetController.setProp = function( propName, val ) {
             var prop = String(propName);
             if( _hasProp( prop ) ) {
-                _Preset[ prop ] = val;
-                return copy_of( _Preset[ prop ] );
+                _Preset.set(prop, val);
+                return JSON.clone( _Preset.get(prop) );
             }
             alert("Could not set preset property.\nProperty " + prop + " does not exist.");
             return undefined;
@@ -676,16 +2410,16 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         }
         
         PresetsController.getTemplate = function() {
-            return Template.getInstance();
+            return presetJaw.getTemplate( true );
         }
 
         PresetsController.getByKey = function ( key, val ) {
-            // Sample usage: Espm.Presets.getByKey('id',3);
+            // Sample usage: Jaxon.Presets.getByKey('id',3);
             // Please note that this function returns the first
             // preset it can find
             var len = _Presets.length;
             for (var i = len-1; i >= 0; i--) {
-                if (_Presets[i].getProp(key) == val) {
+                if (_Presets[i].getProp(key) === val) {
                    return _Presets[i].get();
                 }
             }
@@ -693,7 +2427,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         }
 
         PresetsController.getIndex = function ( key, val ) {
-            // Sample usage: Espm.Presets.getIndex('name','this');
+            // Sample usage: Jaxon.Presets.getIndex('name','this');
             // returns array with matches
             var matches = new Array();
             var len = _Presets.length;
@@ -706,7 +2440,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         }
 
         PresetsController.getByIndex = function ( position ) {
-            // Sample usage: Espm.getPresetByIndex( 3 );
+            // Sample usage: Jaxon.getPresetByIndex( 3 );
             var len = _Presets.length;
             if( outOfRange( position, len ) ) {
                 alert("Preset Manager\nThere is no preset at index " + position);
@@ -717,7 +2451,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         }
 
         PresetsController.getPropList = function ( key ) {
-            if( !Espm.UiPreset.get().hasOwnProperty( key ) ) {
+            if( !Jaxon.UiPreset.get().hasOwnProperty( key ) ) {
                 alert("Preset Manager\nCan't create propertylist with key " + key);
                 return [];
             }
@@ -818,13 +2552,13 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         }
 
         PresetsController.removeWhere = function ( key, val ) {
-            // Sample usage: Espm.Presets.removeWhere('id',3);
+            // Sample usage: Jaxon.Presets.removeWhere('id',3);
             // This function removes any preset that contains key - val match
             // It returns true if any presets have been removed
             var success = false;
             var len = _Presets.length;
             for (var i = len-1; i >= 0; i--) {
-                if (_Presets[i].getProp(key) == val) {
+                if (_Presets[i].getProp(key) === val) {
                     _Presets.splice( i, 1 );
                     success = true;
                 }
@@ -886,16 +2620,36 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         }
 
         // Any preset that starts with a locking character can't be deleted by the user
-        var lockChar           = ['[',']'];
-        var ButtonText         = {save: "Save Preset", clear: "Clear Preset"};
-        var newName            = "New Preset";
-        var lastUsedName       = "Last Used";
+        var lockChars = ['[',']'];
+        WidgetCreator.getLockChars = function () {
+            return lockChars;
+        }
+
+        var ButtonText = {save: "Save Preset", clear: "Clear Preset"};
+        WidgetCreator.getButtonText = function () {
+            return ButtonText;
+        }
+
+        var newName = "New Preset";
+        WidgetCreator.getNewPresetName = function () {
+            return newName;
+        }
+
+        var lastUsedName = "Last Used";
+        WidgetCreator.getLastUsedPresetName = function () {
+            return lastUsedName;
+        }
+
+        // Keep track of which preset this preset is based on
+        // This makes it easy to over-ride an existing preset
+        var basedOnPresetName = newName;
+
         var newPresetName      = "";
         var lastUsedPresetName = "";
 
         function updatePresetNames() {
-            newPresetName      = String(lockChar[0] + " " + newName      + " " + lockChar[1]);
-            lastUsedPresetName = String(lockChar[0] + " " + lastUsedName + " " + lockChar[1]);
+            newPresetName      = String(lockChars[0] + " " + newName      + " " + lockChars[1]);
+            lastUsedPresetName = String(lockChars[0] + " " + lastUsedName + " " + lockChars[1]);
         }
 
         // This makes it possible to update UI everytime UiPreset is changed
@@ -922,7 +2676,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
 
         function createDropDownList(){
             // Check listKey and load dropDown content
-            presetDropList = Espm.Presets.getPropList( listKey );
+            presetDropList = Jaxon.Presets.getPropList( listKey );
             // Add new (clear) preset to dropdown list
             presetDropList.unshift( newPresetName );
         }
@@ -938,13 +2692,13 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
 
         WidgetCreator.activateLastUsed = function () {
             // This function resets the dropdown to last (Last Used)
-            presetsDrop.selection = Espm.Presets.getIndex( listKey, lastUsedPresetName )[0]+1;
+            presetsDrop.selection = Jaxon.Presets.getIndex( listKey, lastUsedPresetName )[0]+1;
             presetBut.text = ButtonText.save;
             return createMsg ( true, "Done" );
         }
 
         WidgetCreator.saveUiPreset = function () {
-            Espm.UiPreset.load( DataPort.getData() );
+            Jaxon.UiPreset.load( DataPort.getData() );
             return createMsg ( true, "Done" );
         }
 
@@ -954,7 +2708,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
             // Process Options
             if(options && options.hasOwnProperty('updateProps')) {
                 for ( var i = 0; i < options.updateProps.length; i++ ) {
-                    Espm.UiPreset.setProp( options.updateProps[i].key, options.updateProps[i].value );
+                    Jaxon.UiPreset.setProp( options.updateProps[i].key, options.updateProps[i].value );
                 }
             }
         
@@ -963,8 +2717,8 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
                 position = parseInt(options.position);
             }
 
-            Espm.UiPreset.save( position );
-            Espm.Presets.saveToDisk();
+            Jaxon.UiPreset.save( position );
+            Jaxon.Presets.saveToDisk();
             
             return createMsg ( true, "Done" );
         }
@@ -972,28 +2726,31 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
         WidgetCreator.overwritePreset = function( key, val, options ) {
             // Save SUI data
             WidgetCreator.saveUiPreset();
-            Espm.UiPreset.setProp( key, val );
+
+            Jaxon.UiPreset.setProp( key, val );
 
             // Process Options
             var index = -1;
             if(options && options.hasOwnProperty('position')) {
                 index = parseInt(options.position);
             } else {
-                index = Espm.Presets.getIndex( key, val );
+                index = Jaxon.Presets.getIndex( key, val );
             }
 
-            Espm.Presets.addUnique( Espm.UiPreset.get(), key, {position: index, silently: true} );
-            Espm.Presets.saveToDisk();
+            Jaxon.Presets.addUnique( Jaxon.UiPreset.get(), key, {position: index, silently: true} );
+            Jaxon.Presets.saveToDisk();
             return createMsg ( true, "Done" );
         }
 
         WidgetCreator.saveLastUsed = function() {
             try {
+                var originalName = Jaxon.UiPreset.get()[listKey];
                 WidgetCreator.overwritePreset( listKey, lastUsedPresetName, {position: -1} );
+                Jaxon.UiPreset.setProp( listKey, originalName );
             } catch ( err ) {
                 alert(err)
             }
-            return Espm.UiPreset.get();
+            return Jaxon.UiPreset.get();
         }
 
         WidgetCreator.reset = function() {
@@ -1002,7 +2759,7 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
 
         WidgetCreator.loadIndex = function( i ) {
             // Load data in UiPreset
-            Espm.UiPreset.loadIndex( i );
+            Jaxon.UiPreset.loadIndex( i );
             // Update SUI
             DataPort.renderUiPreset();
             presetsDrop.selection = getDropDownIndex( i+1, presetDropList.length );
@@ -1017,7 +2774,8 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
                 return createMsg( false, "Could not establish data port.");
             }
             DataPort.renderUiPreset = function () {
-                Port.renderData( Espm.UiPreset.get() );
+                basedOnPresetName = String( Jaxon.UiPreset.getProp(listKey) );
+                Port.renderData( Jaxon.UiPreset.get() );
             }
             DataPort.getData = Port.getData;
 
@@ -1025,10 +2783,10 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
             if(Options && Options.hasOwnProperty('onloadIndex')) {
                 onloadIndex = parseInt(Options.onloadIndex);
             }
-            if(Options && Options.hasOwnProperty('lockChar')) {
+            if(Options && Options.hasOwnProperty('lockChars')) {
                 if(lockChars.length == 2) {
-                    lockChar[0] = String(Options.lockChar[0]);
-                    lockChar[1] = String(Options.lockChar[1]);
+                    lockChars[0] = String(Options.lockChars[0]);
+                    lockChars[1] = String(Options.lockChars[1]);
                 }
             }
             if(Options && Options.hasOwnProperty('newPresetName')) {
@@ -1061,13 +2819,13 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
                 if(updateUI) {
                     // Load data in UiPreset
                     if(this.selection.index == 0) {
-                        Espm.UiPreset.reset();
+                        Jaxon.UiPreset.reset();
                     } else {
-                        Espm.UiPreset.loadIndex( this.selection.index-1 );
+                        Jaxon.UiPreset.loadIndex( this.selection.index-1 );
                     }
                     DataPort.renderUiPreset();
                     // Update button
-                    if( this.selection.text.indexOf(lockChar[0]) == 0 ){
+                    if( this.selection.text.indexOf(lockChars[0]) == 0 ){
                         presetBut.text = ButtonText.save;
                     } else {
                         presetBut.text = ButtonText.clear;
@@ -1100,20 +2858,20 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
             presetBut = SUI_Group.add('button', undefined, ButtonText.save);
 
             function _addUiPresetToPresets( defaultName ) {
-                var defaultName = defaultName || "";
+                var defaultName = defaultName || basedOnPresetName;
                     defaultName = String( defaultName );
 
                 var presetName = prompt("Name: ", defaultName, "Save Preset");
 
                 if ( presetName != null ) {
-                    if ( presetName.indexOf(lockChar[0]) == 0 ) {
-                        alert( "You can't start a preset name with: " + lockChar[0] );
+                    if ( presetName.indexOf(lockChars[0]) == 0 ) {
+                        alert( "You can't start a preset name with: " + lockChars[0] );
                         // Recurse
                         return _addUiPresetToPresets();
                     }
-                    Espm.UiPreset.setProp( listKey, presetName );
+                    Jaxon.UiPreset.setProp( listKey, presetName );
                     // Add preset to end
-                    Espm.Presets.addUnique( Espm.UiPreset.get(), listKey, {position:-1} );
+                    Jaxon.Presets.addUnique( Jaxon.UiPreset.get(), listKey, {position:-1} );
                     WidgetCreator.reset();
                     presetsDrop.selection = presetsDrop.items.length-1;
                 }
@@ -1121,13 +2879,13 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
 
             presetBut.onClick = function () { 
                 if( this.text == ButtonText.clear ) {
-                    Espm.Presets.remove( presetsDrop.selection.index - 1 );
+                    Jaxon.Presets.remove( presetsDrop.selection.index - 1 );
                     WidgetCreator.reset();
                 } else { // Save preset
-                    Espm.UiPreset.load( DataPort.getData() );
+                    Jaxon.UiPreset.load( DataPort.getData() );
                     _addUiPresetToPresets();
                 }
-                Espm.Presets.saveToDisk();
+                Jaxon.Presets.saveToDisk();
             }
             
             // Load selected dropdown
@@ -1142,50 +2900,68 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
 
     } // End Widget
 
-    // current preset (The presets we manipulate)
-    // We need to buils these
-    Espm.Presets  = new presetsController( standardPresets );
-    
-    // create a data controller for UiPreset
-    Espm.UiPreset = new presetController( TemplatePreset );
-    
-    // create widget builder
-    Espm.Widget = new widgetCreator();
 
-    // Extend presetController UiPreset
-    Espm.UiPreset.save = function( position ) {
-        // position or index, negative numbers are calculated from the back -1 == last
-        return Espm.Presets.add( Espm.UiPreset.get(), {position: position} );
+    //-------------------------------------------------
+    // S T A R T  P U B L I C   A P I
+    //-------------------------------------------------
+
+    Jaxon.getPresetsFilePath = function () {
+        return filePath;
     }
 
-    Espm.UiPreset.loadIndex = function ( index ) {
-        var len = Espm.Presets.get().length;
+    Jaxon.errors = function() {
+        // Always return an array of errors
+        if(Array.isArray(errors)) {
+            return errors;
+        } else {
+            return [errors];
+        }
+    }
+
+    // current preset (The presets we manipulate)
+    // We need to buils these
+    Jaxon.Presets  = new presetsController( standardPresets );
+    
+    // create a data controller for UiPreset
+    Jaxon.UiPreset = new presetController( presetJaw.getTemplate( true ) );
+    
+    // create widget builder
+    Jaxon.Widget = new widgetCreator();
+
+    // Extend presetController UiPreset
+    Jaxon.UiPreset.save = function( position ) {
+        // position or index, negative numbers are calculated from the back -1 == last
+        return Jaxon.Presets.add( Jaxon.UiPreset.get(), {position: position} );
+    }
+
+    Jaxon.UiPreset.loadIndex = function ( index ) {
+        var len = Jaxon.Presets.get().length;
         var i = Math.abs(parseInt(index));
         if(i > len-1) {
             alert("Preset Manager\nLoad index is not a valid preset index: " + index);
             return createMsg ( false, "Not a valid preset index." );
         }
-        Espm.UiPreset.load( Espm.Presets.getByIndex( i ) );
+        Jaxon.UiPreset.load( Jaxon.Presets.getByIndex( i ) );
         return createMsg ( true, "Done" );
     }
 
-    Espm.UiPreset.reset = function ( ) {
-        Espm.UiPreset.load( Template.getInstance() );
+    Jaxon.UiPreset.reset = function ( ) {
+        Jaxon.UiPreset.load( presetJaw.getTemplate( true ) );
     }
 
-    Espm.reset = function( hard ) {
+    Jaxon.reset = function( hard ) {
         var hard = (hard == true);
         if( hard ) {
-            Espm.Presets.reset();
-            Espm.Presets.saveToDisk();
+            Jaxon.Presets.reset();
+            Jaxon.Presets.saveToDisk();
         } else {
-            Espm.Presets.loadFromDisk();
+            Jaxon.Presets.loadFromDisk();
         }
-        Espm.UiPreset.reset();
-        Espm.Widget.reset();
+        Jaxon.UiPreset.reset();
+        Jaxon.Widget.reset();
     }
 
-    Espm.format = function ( preset ) {
+    Jaxon.format = function ( preset ) {
         return updatePreset ( preset );
     }
 
@@ -1197,26 +2973,16 @@ var presetManager = function( fileName, standardPresets, TemplatePreset ) {
     //---------    
     // Save the standard presets if not allready exist
     if(!fileExist( filePath ) ){
-        if( ! Espm.Presets.saveToDisk() ){
-            throw("Failed to start Espm\nUnable to save presets to " + filePath);
+        if( ! Jaxon.Presets.saveToDisk() ){
+            throw("Failed to start Jaxon\nUnable to save presets to " + filePath);
         }
     }
     // Load the presets
-    Espm.Presets.loadFromDisk();
+    Jaxon.Presets.loadFromDisk();
 };
 
-//----------------------------------------------------------------------------------
-/*
- * JSON - from: https://github.com/douglascrockford/JSON-js
- */
-if(typeof JSON!=='object'){JSON={};}(function(){'use strict';function f(n){return n<10?'0'+n:n;}function this_value(){return this.valueOf();}if(typeof Date.prototype.toJSON!=='function'){Date.prototype.toJSON=function(){return isFinite(this.valueOf())?this.getUTCFullYear()+'-'+f(this.getUTCMonth()+1)+'-'+f(this.getUTCDate())+'T'+f(this.getUTCHours())+':'+f(this.getUTCMinutes())+':'+f(this.getUTCSeconds())+'Z':null;};Boolean.prototype.toJSON=this_value;Number.prototype.toJSON=this_value;String.prototype.toJSON=this_value;}var cx,escapable,gap,indent,meta,rep;function quote(string){escapable.lastIndex=0;return escapable.test(string)?'"'+string.replace(escapable,function(a){var c=meta[a];return typeof c==='string'?c:'\\u'+('0000'+a.charCodeAt(0).toString(16)).slice(-4);})+'"':'"'+string+'"';}function str(key,holder){var i,k,v,length,mind=gap,partial,value=holder[key];if(value&&typeof value==='object'&&typeof value.toJSON==='function'){value=value.toJSON(key);}if(typeof rep==='function'){value=rep.call(holder,key,value);}switch(typeof value){case'string':return quote(value);case'number':return isFinite(value)?String(value):'null';case'boolean':case'null':return String(value);case'object':if(!value){return'null';}gap+=indent;partial=[];if(Object.prototype.toString.apply(value)==='[object Array]'){length=value.length;for(i=0;i<length;i+=1){partial[i]=str(i,value)||'null';}v=partial.length===0?'[]':gap?'[\n'+gap+partial.join(',\n'+gap)+'\n'+mind+']':'['+partial.join(',')+']';gap=mind;return v;}if(rep&&typeof rep==='object'){length=rep.length;for(i=0;i<length;i+=1){if(typeof rep[i]==='string'){k=rep[i];v=str(k,value);if(v){partial.push(quote(k)+(gap?': ':':')+v);}}}}else{for(k in value){if(Object.prototype.hasOwnProperty.call(value,k)){v=str(k,value);if(v){partial.push(quote(k)+(gap?': ':':')+v);}}}}v=partial.length===0?'{}':gap?'{\n'+gap+partial.join(',\n'+gap)+'\n'+mind+'}':'{'+partial.join(',')+'}';gap=mind;return v;}}if(typeof JSON.stringify!=='function'){escapable=/[\\\"\u0000-\u001f\u007f-\u009f\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g;meta={'\b':'\\b','\t':'\\t','\n':'\\n','\f':'\\f','\r':'\\r','"':'\\"','\\':'\\\\'};JSON.stringify=function(value,replacer,space){var i;gap='';indent='';if(typeof space==='number'){for(i=0;i<space;i+=1){indent+=' ';}}else if(typeof space==='string'){indent=space;}rep=replacer;if(replacer&&typeof replacer!=='function'&&(typeof replacer!=='object'||typeof replacer.length!=='number')){throw new Error('JSON.stringify');}return str('',{'':value});};}if(typeof JSON.parse!=='function'){cx=/[\u0000\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g;JSON.parse=function(text,reviver){var j;function walk(holder,key){var k,v,value=holder[key];if(value&&typeof value==='object'){for(k in value){if(Object.prototype.hasOwnProperty.call(value,k)){v=walk(value,k);if(v!==undefined){value[k]=v;}else{delete value[k];}}}}return reviver.call(holder,key,value);}text=String(text);cx.lastIndex=0;if(cx.test(text)){text=text.replace(cx,function(a){return'\\u'+('0000'+a.charCodeAt(0).toString(16)).slice(-4);});}if(/^[\],:{}\s]*$/.test(text.replace(/\\(?:["\\\/bfnrt]|u[0-9a-fA-F]{4})/g,'@').replace(/"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g,']').replace(/(?:^|:|,)(?:\s*\[)+/g,''))){j=eval('('+text+')');return typeof reviver==='function'?walk({'':j},''):j;}throw new SyntaxError('JSON.parse');};}}());
-
-// END presetManager.js
-//----------------------------------------------------------------------------------
-
-
 ﻿// Bruno Herfst 2018
-// v1.1
+// v1.2
 
 var idUtil = new Object();
 
@@ -1700,6 +3466,11 @@ function layerLocked(myLayer, givenLock){
         myLayer.locked = false;
         return originalLock;
     }
+}
+
+function escapeRegExp(str) {
+  // Source: https://stackoverflow.com/questions/3446170/escape-string-for-use-in-javascript-regex
+  return str.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, "\\$&");
 }
 
 // END id_Util.js
@@ -3537,7 +5308,7 @@ function FontSelect(group, font, resetPresetDropdown) {
   var userChange  = true;
 
   // Start ExtendScript Preset Manager
-  var Pm = new presetManager("EAN13_barcode_Settings.json", standardPresets);
+  var Pm = new presetManager("EAN13_barcode_Settings.json", Barcode_Settings_Schema, standardPresets);
 
   var bwrUnits = ['dots', 'mm', 'µm', 'inch', 'mils'];
 
@@ -3563,21 +5334,21 @@ function FontSelect(group, font, resetPresetDropdown) {
   var currentPage    = null;
   var barcodeBox     = null;
 
+  function getBarcodePreset( pageItem ){
+    var tempData = pageItem.label;
+    if(tempData.length > 0){
+      var bData = JSON.parse(tempData);
+      if( typeof bData == 'object' && bData.hasOwnProperty('ean') ) {
+        return Pm.format( bData );
+      }
+    }
+    return false;
+  }
+
   function checkActiveDoc( activeDoc ){
     // Update pages info
     list_of_pages = activeDoc.pages.everyItem().name;
     currentPage   = app.activeWindow.activePage.name;
-
-    function getBarcodePreset( pageItem ){
-      var tempData = pageItem.label;
-      if(tempData.length > 0){
-        var bData = JSON.parse(tempData);
-        if( typeof bData == 'object' && bData.hasOwnProperty('ean') ) {
-          return Pm.format( bData );
-        }
-      }
-      return false;
-    }
 
     function updatePageNumber( MyPreset ) {
       // This function makes sure pagenumer is valid
@@ -4170,6 +5941,21 @@ function FontSelect(group, font, resetPresetDropdown) {
 
   // End adjustment panel
 
+  // Add Buttons
+  //-------------
+  var presetDropGroup = presetPanel.add('group');
+
+  var cancelBut = presetPanel.add('button', undefined, 'Cancel', {name: 'cancel'});
+  var okBut     = presetPanel.add('button', undefined, 'Generate', {name: 'OK'});
+  
+  // Set Return/Enter key to OK window
+  okBut.shortcutKey = 'R';
+  okBut.onShortcutKey = okBut.onClick;
+  dialog.defaultElement = okBut; 
+
+  // End buttons
+  //-------------
+
   function humanReadBool( eanString ) {
       // This function checks if EAN-13 barcode needs human readable string
       // Returns True or False
@@ -4220,6 +6006,16 @@ function FontSelect(group, font, resetPresetDropdown) {
 
   function renderData( p ) {
     userChange = false;
+    
+    var startingLockChar = Pm.Widget.getLockChars()[0];
+    var re = new RegExp(escapeRegExp(startingLockChar) + " [0-9-]{8,}", "g");
+
+    if( String(p.name).match(re) ) {
+      // Update buton text to "Update"
+      okBut.text = "Update";
+    } else {
+      okBut.text = "Generate";
+    }
 
     try {
       // Set input
@@ -4255,22 +6051,9 @@ function FontSelect(group, font, resetPresetDropdown) {
     userChange = true;
   }
 
-  // Add Buttons
-  //-------------
   // Attach widget
-  Pm.Widget.attachTo( presetPanel, 'name', { getData:getData, renderData:renderData }, { onloadIndex:onloadIndex } );
+  Pm.Widget.attachTo( presetDropGroup, 'name', { getData:getData, renderData:renderData }, { onloadIndex:onloadIndex } );
 
-  // Add OK/Cancel
-  var cancelBut = presetPanel.add('button', undefined, 'Cancel', {name: 'cancel'});
-  var okBut     = presetPanel.add('button', undefined, 'Generate', {name: 'OK'});
-
-  // Set Return/Enter key to OK window
-  okBut.shortcutKey = 'R';
-  okBut.onShortcutKey = okBut.onClick;
-  dialog.defaultElement = okBut; 
-
-  // End buttons
-  //-------------
   if (dialog.show() === 1) {
     // Save anf get user settings
     var preset  = Pm.Widget.saveLastUsed();
@@ -4333,12 +6116,30 @@ function FontSelect(group, font, resetPresetDropdown) {
         return showDialog(-1); // Restart
     }
 
-    if( preset.alignTo === "Selection" ) {
-      preset.selectionBounds = selectionDetails.bounds;
-    } else if( preset.alignTo === "Barcode Box" ) {
-      preset.selectionBounds = barcodeBoxDetails.bounds;
+    if(okBut.text === "Generate") {
+      if( preset.alignTo === "Selection" ) {
+        preset.selectionBounds = selectionDetails.bounds;
+      } else if( preset.alignTo === "Barcode Box" ) {
+        preset.selectionBounds = barcodeBoxDetails.bounds;
+      } else {
+        preset.selectionBounds = [0,0,0,0];
+      }
     } else {
-      preset.selectionBounds = [0,0,0,0];
+      // remove barcode
+      // Get existing barcodes in document and add check their settings
+      var existingBarcodes = idUtil.getItemsByName(activeDoc, "Barcode_Settings");
+      if(existingBarcodes.length > 0) {
+        for (i = 0; i < existingBarcodes.length; i++) { 
+          var eBarcodePreset = getBarcodePreset(existingBarcodes[i]);
+          if( preset.name === ("[ "+ eBarcodePreset.ean +" ]") ) {
+              var barcodeGroup = existingBarcodes[i].parent;
+              // Make sure we have the right parent, sorry mum!
+              if(barcodeGroup.label == "Barcode_Complete") {
+                barcodeGroup.remove();
+              }
+          }
+        }
+      }
     }
 
     return preset;
@@ -4410,13 +6211,17 @@ var BarcodeDrawer = (function () {
       top    : app.marginPreferences.top,
       left   : app.marginPreferences.left,
       bottom : app.marginPreferences.bottom,
-      right  : app.marginPreferences.right
+      right  : app.marginPreferences.right,
+      columnCount  : app.marginPreferences.columnCount,
+      columnGutter : app.marginPreferences.columnGutter
     };
 
     app.marginPreferences.top    = 0;
     app.marginPreferences.left   = 0;
     app.marginPreferences.bottom = 0;
     app.marginPreferences.right  = 0;
+    app.marginPreferences.columnCount  = 1;
+    app.marginPreferences.columnGutter = 0;
 
     var d = app.documents.add( !hiding );
     d.insertLabel('build_by_ean13barcodegenerator', 'true');
@@ -4439,6 +6244,8 @@ var BarcodeDrawer = (function () {
     app.marginPreferences.left   = originalMarginPreference.left  ;
     app.marginPreferences.bottom = originalMarginPreference.bottom;
     app.marginPreferences.right  = originalMarginPreference.right ;
+    app.marginPreferences.columnCount  = originalMarginPreference.columnCount;
+    app.marginPreferences.columnGutter = originalMarginPreference.columnGutter;
 
     return d;
   }
