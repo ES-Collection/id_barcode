@@ -1511,7 +1511,7 @@ var presetManager = function( fileName, Schema, standardPresets ) {
 
     // Validate standardPresets
     //-------------------------
-    if ( typeof standardPresets === 'undefined') standardPresets = [Jaws.getTemplate(true)];
+    if ( typeof standardPresets === 'undefined') standardPresets = [presetsJaws.getTemplate(true)];
     if ( Array.isArray( standardPresets ) ) {
         standardPresets = JSON.clone( standardPresets );
     } else {

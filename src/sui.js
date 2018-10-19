@@ -707,7 +707,7 @@
     var re = new RegExp(escapeRegExp(startingLockChar) + " [0-9-]{8,}", "g");
 
     if( String(p.name).match(re) ) {
-      // Update buton text to "Update"
+      // Update button text to "Update"
       okBut.text = "Update";
     } else {
       okBut.text = "Generate";
